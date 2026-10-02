@@ -1,0 +1,32 @@
+# Component 1 - ship detection
+tensorflow>=2.16
+opencv-python>=4.9
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+kagglehub>=0.3
+tqdm>=4.66
+
+# Component 1 - Sentinel-2 acquisition. rasterio reads a window out of a
+# remote COG over HTTPS, so a 25 km AOI costs a few MB instead of a 110 km tile.
+rasterio>=1.3
+requests>=2.31
+
+# Components 2 and 3. GDELT and Open-Meteo are both key-free and are called
+# through the standard library, so nothing is needed for them here.
+pandas>=2.2
+scipy>=1.11
+python-dotenv>=1.0
+
+# Component 3 dashboard (3_ranking/app.py)
+streamlit>=1.46
+plotly>=5.20
+
+# The impact model (3_ranking/ranking/analysis.py) is deliberately numpy + scipy only:
+# ridge, the elastic net, the bootstrap and the AUC are implemented directly.
+# scikit-learn and statsmodels are NOT required - on the machine this was
+# built on, their compiled extensions were blocked by Windows Application
+# Control, and writing the ~40 lines was cheaper than fighting the policy.
+
+# Dev
+pytest>=8.0

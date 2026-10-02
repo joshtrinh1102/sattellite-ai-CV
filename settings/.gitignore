@@ -1,0 +1,34 @@
+# Environments
+.venv*/
+venv/
+.env
+
+# Paths are repo-relative (this file lives in settings/; see README).
+
+# 1_ship_detection - scenes and weights are large / regenerable...
+1_ship_detection/data/*
+1_ship_detection/models/*.keras
+1_ship_detection/outputs/
+# ...except the hand-assigned chip LABELS, which would have to be redone by eye.
+# The chip pixels (chips.npy, 29 MB) are reproducible from the scenes.
+!1_ship_detection/data/chips/
+1_ship_detection/data/chips/*
+!1_ship_detection/data/chips/labels.json
+!1_ship_detection/data/chips/chips.csv
+
+# 2_factors - cache/ IS versioned, so a rebuild does not depend on GDELT being
+# reachable (it rate-limits hard enough to block a whole run).
+
+# handoff/ and 3_ranking/outputs/ are versioned - they are the point of the repo.
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# OS / tooling
+.DS_Store
+Thumbs.db
+.waylog/
+settings/ai-chat-logs/
