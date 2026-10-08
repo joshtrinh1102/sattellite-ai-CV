@@ -59,7 +59,7 @@ def _num(v):
     return None if v in (None, "") else float(v)
 
 
-def window_features(daily, d, window=7):
+def window_features(daily, d, window=7, groups=None):
     """Factor values over the `window` days ending on capture date `d`.
 
     Weather is summarised two ways - the day itself, and the run-up, because a
@@ -87,16 +87,22 @@ def window_features(daily, d, window=7):
     if len(days) < window or not all(x["news_covered"] == "1" for x in days):
         return wx, None
     topics = [c[len("count_"):] for c in days[0] if c.startswith("count_")]
+    if groups:   # fold topics into dimensions; unlisted topics keep their own
+        grouped = {t for ts in groups.values() for t in ts}
+        groups = {**groups, **{t: [t] for t in topics if t not in grouped}}
+    else:
+        groups = {t: [t] for t in topics}
     n_rel = sum(float(x["n_relevant"]) for x in days)
-    news = {f"share_{t}": (sum(float(x[f"count_{t}"]) for x in days) / n_rel
-                           if n_rel else 0.0) for t in topics}
+    news = {f"share_{g}": (sum(float(x[f"count_{t}"]) for x in days
+                               for t in ts if f"count_{t}" in x) / n_rel
+                           if n_rel else 0.0) for g, ts in groups.items()}
     news["tone_mean_relevant"] = (sum(float(x["tone_sum_relevant"]) for x in days)
                                   / n_rel if n_rel else 0.0)
     news["news_volume"] = n_rel
     return wx, news
 
 
-def build_features(counts, daily, use_news, window=7):
+def build_features(counts, daily, use_news, window=7, groups=None):
     """One row per capture date: target density plus every candidate factor.
 
     With `use_news`, dates whose window lacks full news coverage are dropped
@@ -106,7 +112,7 @@ def build_features(counts, daily, use_news, window=7):
     t0 = counts[0]["date_obj"]
     for r in counts:
         d = r["date_obj"]
-        wx, news = window_features(daily, d, window)
+        wx, news = window_features(daily, d, window, groups)
         if use_news and news is None:
             continue
         month_angle = 2 * np.pi * (d.month - 1) / 12.0
@@ -137,7 +143,7 @@ def write_csv(path, rows, fieldnames=None):
 
 def main(argv=None):
     from .config import (FACTOR_RANKING, FACTORS_DAILY, RESULTS_MD, SHIP_COUNTS,
-                         STUDY_FEATURES, STUDY_RESULT)
+                         STUDY_FEATURES, STUDY_RESULT, TOPIC_GROUPS)
 
     p = argparse.ArgumentParser(description="Rank the factors behind ship counts.")
     p.add_argument("--window", type=int, default=7)
@@ -147,20 +153,24 @@ def main(argv=None):
     p.add_argument("--news", choices=["auto", "on", "off"], default="auto",
                    help="auto: use news factors only if every capture date has "
                         "full GDELT coverage; on: drop dates that do not")
+    p.add_argument("--topics", choices=["grouped", "individual"], default="grouped",
+                   help="grouped: fold the 12 topics into the dimensions in "
+                        "config.TOPIC_GROUPS; individual: one factor per topic")
     args = p.parse_args(argv)
+    groups = TOPIC_GROUPS if args.topics == "grouped" else None
 
     counts = read_ship_counts(SHIP_COUNTS)
     daily = {r["date"]: r for r in read_csv(FACTORS_DAILY)}
     print(f"Ship counts: {len(counts)} capture dates, "
           f"{counts[0]['date']} -> {counts[-1]['date']}")
 
-    n_cov = sum(window_features(daily, r["date_obj"], args.window)[1] is not None
+    n_cov = sum(window_features(daily, r["date_obj"], args.window, groups)[1] is not None
                 for r in counts)
     have_news = args.news == "on" or (args.news == "auto" and n_cov == len(counts))
     print(f"News coverage: {n_cov}/{len(counts)} capture windows -> news factors "
           + ("ON" if have_news else "OFF (run 2_factors with --fetch-news to fill)"))
 
-    X, y, dts, names, rows = build_features(counts, daily, have_news, args.window)
+    X, y, dts, names, rows = build_features(counts, daily, have_news, args.window, groups)
     kept = set(dts)
     occ = [r for r in counts if r["date"] in kept]
     print(f"\nDesign matrix: {X.shape[0]} dates x {X.shape[1]} features")

@@ -52,6 +52,18 @@ def test_news_shares_pool_counts_over_the_window():
     assert news["news_volume"] == 4
 
 
+def test_topic_groups_sum_their_members_and_keep_unlisted_topics():
+    end = date(2021, 10, 10)
+    daily = _week(end, {0: {"n_rel": 4, "labour": 1}})
+    for row in daily.values():
+        row["count_conflict_war"] = "1" if row["n_relevant"] == "4" else "0"
+    _, news = window_features(daily, end, groups={"both": ["labor_shortages", "conflict_war"]})
+    assert news["share_both"] == pytest.approx(0.5)      # (1 + 1) / 4
+    assert "share_labor_shortages" not in news
+    _, news = window_features(daily, end, groups={"supply": ["labor_shortages"]})
+    assert "share_conflict_war" in news                  # unlisted topic survives
+
+
 def test_one_uncovered_day_drops_news_for_the_window():
     end = date(2021, 10, 10)
     daily = _week(end, {4: {"covered": False}})

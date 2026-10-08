@@ -7,6 +7,7 @@ it never recomputes the model, so what it shows is exactly what the CSV says.
 """
 
 import json
+from datetime import datetime
 
 import pandas as pd
 import plotly.express as px
@@ -15,6 +16,7 @@ import streamlit as st
 
 from ranking.config import (DETECTIONS, FACTOR_RANKING, SHIP_COUNTS,
                             STUDY_FEATURES, STUDY_RESULT)
+from ranking.updater import STEPS, UpdateJob
 
 st.set_page_config(page_title="Ship Factor Study", layout="wide")
 
@@ -36,6 +38,58 @@ def load():
     result = json.loads(STUDY_RESULT.read_text(encoding="utf-8"))
     return ships, rank, feats, result
 
+
+@st.cache_resource
+def update_job():
+    return UpdateJob()      # one shared refresh, however many sessions are open
+
+
+def _update_password():
+    try:
+        return st.secrets.get("UPDATE_PASSWORD")
+    except Exception:       # no secrets file configured
+        return None
+
+
+def update_panel(job):
+    """Sidebar: refresh news + weather, re-rank, reload. Hours when GDELT is slow."""
+    updated = datetime.fromtimestamp(STUDY_RESULT.stat().st_mtime)
+    st.caption(f"Data last updated {updated:%Y-%m-%d %H:%M}")
+    if job.running:
+        label = dict((k, t) for k, t, *_ in STEPS).get(job.step, "Starting")
+        st.info(f"Running: {label}…")
+        st.button("Stop fetching", on_click=job.stop_fetch,
+                  help="Keeps what was fetched, then rebuilds and re-ranks.")
+    else:
+        locked = _update_password()
+        allowed = not locked or st.text_input(
+            "Update password", type="password") == locked
+        st.button("Update data", on_click=job.start, disabled=not allowed,
+                  help="Fetches missing news and weather, then re-ranks. "
+                       "Only gaps are fetched; GDELT rate limits can make a full "
+                       "run take hours.")
+        if job.state == "done":
+            st.success("Update finished.")
+        elif job.state == "failed":
+            st.error("Update failed - see the log.")
+    if job.state != "idle":
+        with st.expander("Log", expanded=job.running):
+            st.code(job.tail() or "…", language=None)
+    if job.generation != st.session_state.get("seen_gen"):
+        st.session_state["seen_gen"] = job.generation
+        load.clear()
+        st.rerun()
+
+
+job = update_job()
+st.session_state.setdefault("seen_gen", job.generation)
+if job.generation != st.session_state["seen_gen"]:
+    load.clear()
+    st.session_state["seen_gen"] = job.generation
+with st.sidebar:
+    st.subheader("Update data")
+    # Poll only while a job is running; an idle page costs nothing.
+    st.fragment(run_every=3 if job.running else None)(update_panel)(job)
 
 ships, rank, feats, result = load()
 
