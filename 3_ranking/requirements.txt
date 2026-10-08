@@ -1,0 +1,7 @@
+# Dashboard only (3_ranking/app.py). Streamlit Cloud reads this file because it
+# sits next to the app; the full pipeline requirements are in the repo root.
+streamlit>=1.46
+plotly>=5.20
+pandas>=2.2
+numpy>=1.26
+scipy>=1.11
