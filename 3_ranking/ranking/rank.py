@@ -175,7 +175,7 @@ def main(argv=None):
     out = {"gate": gate, "n_dates": len(y), "dates": dts,
            "has_news_factors": have_news, "features": names}
 
-    # COVID is asked for by name in settings/requirements.md and is valid at every sample
+    # COVID is asked for by name in requirements.md and is valid at every sample
     # size, so this runs regardless of which gate was selected.
     #
     # It has to be split into two phases, because at San Pedro Bay the pandemic
@@ -271,7 +271,7 @@ def write_report(path, out, occ, feature_names):
     if out.get("periods"):
         L.append("## COVID vs normal\n")
         L.append("Answers *\"do ships during covid have less than ships during "
-                 "normal times\"* from settings/requirements.md — but the pandemic has to "
+                 "normal times\"* from requirements.md — but the pandemic has to "
                  "be split in two, because at San Pedro Bay it moved ship counts "
                  "in opposite directions. Spring 2020 was a demand collapse; from "
                  "late 2020 the import surge produced the anchorage backlog. "
@@ -362,7 +362,7 @@ def write_report(path, out, occ, feature_names):
         L.append("## News factors are absent from this run\n")
         L.append("News coverage from GDELT is incomplete, so the ranking above "
                  "covers weather and seasonality only. The topic factors from "
-                 "settings/requirements.md — labour, policy, conflict, pandemic and the "
+                 "requirements.md — labour, policy, conflict, pandemic and the "
                  "rest — are **not** in it, and their absence from the table is "
                  "not evidence that they do not matter. Re-run "
                  "`python -m factors.build --fetch-news` in 2_factors, then this "
