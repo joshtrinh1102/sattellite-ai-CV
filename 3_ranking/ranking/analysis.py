@@ -272,6 +272,69 @@ def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0, weights=
             "n": len(y), "n_features": X.shape[1]}
 
 
+def _partial_rank_corr(x, y, C):
+    """Spearman correlation of x and y after removing controls C from both.
+
+    Ranks x and y, regresses each on the controls (plus intercept), and
+    correlates the residuals. Returns (rho, p) with p from the t distribution on
+    n - 2 - k degrees of freedom.
+    """
+    n = len(y)
+    A = np.column_stack([np.ones(n), C]) if C.size else np.ones((n, 1))
+    rx, ry = stats.rankdata(x), stats.rankdata(y)
+    ex = rx - A @ np.linalg.lstsq(A, rx, rcond=None)[0]
+    ey = ry - A @ np.linalg.lstsq(A, ry, rcond=None)[0]
+    if ex.std() < 1e-12 or ey.std() < 1e-12:
+        return 0.0, 1.0
+    r = float(np.clip(np.corrcoef(ex, ey)[0, 1], -0.999999, 0.999999))
+    dof = n - 2 - (A.shape[1] - 1)
+    if dof <= 0:
+        return r, 1.0
+    t = r * np.sqrt(dof / (1 - r * r))
+    return r, float(2 * stats.t.sf(abs(t), dof))
+
+
+def partial_spearman_ranking(X, y, feature_names, test_idx, control_idx,
+                             n_boot=1000, seed=0):
+    """Exploratory ranking for samples too small for the elastic net.
+
+    One partial Spearman correlation per tested feature, controlling for
+    `control_idx` (season and trend), with a bootstrap 95% interval and a BH
+    correction across the tested features only. Univariate by construction: it
+    cannot separate two dimensions that move together, which is exactly what
+    the elastic net does once there are enough dates.
+    """
+    X = np.asarray(X, dtype="float64")
+    y = np.asarray(y, dtype="float64")
+    C = X[:, control_idx] if len(control_idx) else np.empty((len(y), 0))
+    rng = np.random.default_rng(seed)
+    n = len(y)
+    boots = [rng.integers(0, n, n) for _ in range(n_boot)]
+
+    rows, praw = [], []
+    for j in test_idx:
+        rho, p = _partial_rank_corr(X[:, j], y, C)
+        draws = []
+        for idx in boots:
+            if np.unique(idx).size < C.shape[1] + 4:
+                continue
+            draws.append(_partial_rank_corr(X[idx, j], y[idx], C[idx])[0])
+        draws = np.asarray(draws) if draws else np.array([rho])
+        rows.append({"factor": feature_names[j], "partial_rho": rho,
+                     "rho_ci_low": float(np.percentile(draws, 2.5)),
+                     "rho_ci_high": float(np.percentile(draws, 97.5)),
+                     "spearman_p": p})
+        praw.append(p)
+    survives, padj = benjamini_hochberg(np.array(praw)) if praw else ([], [])
+    for r, s, pa in zip(rows, survives, padj):
+        r["spearman_p_adj"] = float(pa)
+        r["bh_survives"] = bool(s)
+    rows.sort(key=lambda r: -abs(r["partial_rho"]))
+    return {"method": "partial_spearman", "ranking": rows, "n": n,
+            "n_features": len(rows),
+            "controls": [feature_names[j] for j in control_idx]}
+
+
 def explain_date(X, y, feature_names, target_index, lam=None, l1_ratio=0.5,
                  weights=None):
     """Decompose one date's predicted density into per-factor contributions.

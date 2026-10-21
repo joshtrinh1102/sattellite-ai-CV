@@ -32,6 +32,14 @@ LUNAR_NEW_YEAR = {
 }
 
 
+# Below the elastic-net threshold the news dimensions are still shown, ranked by
+# an exploratory partial correlation; below this many dates nothing is shown.
+MIN_NEWS_DATES = 10
+# Controls for that exploratory ranking: season and trend only. Adding the six
+# weather features too would spend most of the degrees of freedom at n ~ 20.
+EXPLORATORY_CONTROLS = ("month_sin", "month_cos", "days_to_lny", "time_trend")
+
+
 def days_to_lny(d):
     """Absolute days to the nearest Lunar New Year, capped at 90."""
     best = 999
@@ -202,9 +210,15 @@ def main(argv=None):
 
     n_cov = sum(window_features(daily, r["date_obj"], args.window, level)[1] is not None
                 for r in counts)
-    have_news = args.news == "on" or (args.news == "auto" and n_cov == len(counts))
+    # auto: show the news dimensions with whatever coverage exists. Uncovered
+    # dates are dropped rather than filled (a GDELT gap is not a quiet news
+    # week); the method then adapts to how many dates are left - the elastic
+    # net from 60, an exploratory partial correlation below that.
+    have_news = args.news == "on" or (args.news == "auto" and n_cov >= MIN_NEWS_DATES)
     print(f"News coverage: {n_cov}/{len(counts)} capture windows -> news factors "
-          + ("ON" if have_news else "OFF (run 2_factors with --fetch-news to fill)"))
+          + (f"ON ({len(counts) - n_cov} uncovered dates dropped)" if have_news
+             else f"OFF (need {MIN_NEWS_DATES}; run 2_factors with --fetch-news "
+                  "--capture-windows)"))
 
     X, y, dts, names, rows = build_features(counts, daily, have_news, args.window, level)
     kept = set(dts)
@@ -220,7 +234,7 @@ def main(argv=None):
 
     weights = feature_weights(names, defs)
     out = {"gate": gate, "n_dates": len(y), "dates": dts,
-           "has_news_factors": have_news, "features": names, "level": level,
+           "has_news_factors": have_news, "n_capture_dates": len(counts), "features": names, "level": level,
            "weights": dict(zip(names, weights))}
 
     # COVID is asked for by name in requirements.md and is valid at every sample
@@ -239,7 +253,10 @@ def main(argv=None):
         "covid_backlog": lambda d: "2020-09-01" <= d <= "2022-06-30",
         "post": lambda d: d > "2022-06-30",
     }
-    grouped = {k: [v for d, v in zip(dts, y) if f(d)] for k, f in periods.items()}
+    # Every capture date, not just the news-covered ones: this question needs
+    # ship counts only, so a news gap must not shrink its sample.
+    grouped = {k: [r["density"] for r in counts if f(r["date"])]
+               for k, f in periods.items()}
     out["periods"] = {k: {"n": len(v), "mean": float(np.mean(v)) if v else None}
                       for k, v in grouped.items()}
     print("\nShip density by period (ships/km2):")
@@ -258,6 +275,22 @@ def main(argv=None):
                   f"({c['pct_change']:+.1f}%), 95% CI "
                   f"[{c['ci_low']:+.3f}, {c['ci_high']:+.3f}], "
                   f"MW p={c['mannwhitney_p']:.3f}  (n={c['n_a']} vs {c['n_b']})")
+
+    news_idx = [j for j, n in enumerate(names) if n.startswith("share_")]
+    if gate["method"] != "elastic_net" and news_idx and len(y) >= MIN_NEWS_DATES:
+        controls = [j for j, n in enumerate(names) if n in EXPLORATORY_CONTROLS]
+        print(f"\nExploratory ranking of {len(news_idx)} news features on {len(y)} "
+              f"dates (partial Spearman, controlling for "
+              f"{', '.join(names[j] for j in controls)})...")
+        res = analysis.partial_spearman_ranking(X, y, names, news_idx, controls)
+        out["ranking"] = res
+        write_csv(FACTOR_RANKING, res["ranking"])
+        for r in res["ranking"]:
+            print(f"  {r['factor']:32s} rho {r['partial_rho']:+.2f} "
+                  f"[{r['rho_ci_low']:+.2f}, {r['rho_ci_high']:+.2f}]  "
+                  f"p_adj {r['spearman_p_adj']:.3f}" + ("  *" if r["bh_survives"] else ""))
+    elif gate["method"] != "elastic_net":
+        FACTOR_RANKING.write_text("factor\n", encoding="utf-8")   # no stale ranking
 
     if gate["method"] == "elastic_net":
         print(f"\nRanking {X.shape[1]} factors (elastic net + {args.boot} bootstraps)...")
@@ -309,7 +342,10 @@ def write_report(path, out, occ, feature_names):
 
     L.append("## Sample\n")
     L.append(f"- Capture dates analysed: **{out['n_dates']}** "
-             f"({occ[0]['date']} to {occ[-1]['date']})")
+             f"({occ[0]['date']} to {occ[-1]['date']})"
+             + (f", {out['n_capture_dates'] - out['n_dates']} more dropped because the "
+                "week before them has no news coverage"
+                if out.get("n_capture_dates", out["n_dates"]) > out["n_dates"] else ""))
     L.append(f"- Ship counts: min {min(r['n_ships'] for r in occ)}, "
              f"median {int(np.median([r['n_ships'] for r in occ]))}, "
              f"max {max(r['n_ships'] for r in occ)}")
@@ -353,7 +389,31 @@ def write_report(path, out, occ, feature_names):
                      f"{'not distinguishable from noise' if crosses else 'detectable'} "
                      f"at this sample size.\n")
 
-    if "ranking" in out:
+    if out.get("ranking", {}).get("method") == "partial_spearman":
+        r = out["ranking"]
+        L.append("## Exploratory ranking (too few dates for the model)\n")
+        L.append(f"Only **{r['n']}** capture dates have full news coverage, below the "
+                 "60 the elastic net needs. Each news dimension is instead ranked "
+                 "by its partial Spearman correlation with ship density, "
+                 f"controlling for {', '.join(f'`{c}`' for c in r['controls'])}, "
+                 "with a bootstrap 95% interval and a Benjamini-Hochberg "
+                 "correction across the dimensions. Weather is not controlled "
+                 "for at this size.\n")
+        L.append("Read this as a first look, not a ranking of effects: it is "
+                 "univariate, so it cannot separate two dimensions that rise "
+                 "together, and with this few dates the intervals are wide. It "
+                 "is replaced by the elastic-net ranking automatically once "
+                 "coverage reaches 60 dates. Importance weights do not apply "
+                 "to it.\n")
+        L.append("| dimension | partial rho | 95% CI | p | p (BH-adj) |")
+        L.append("|---|---:|---:|---:|---:|")
+        for row in r["ranking"]:
+            L.append(f"| {row['factor']} | {row['partial_rho']:+.2f} | "
+                     f"[{row['rho_ci_low']:+.2f}, {row['rho_ci_high']:+.2f}] | "
+                     f"{row['spearman_p']:.3f} | {row['spearman_p_adj']:.3f}"
+                     f"{' **' if row['bh_survives'] else ''} |")
+        L.append("")
+    elif "ranking" in out:
         r = out["ranking"]
         L.append("## Factor ranking\n")
         L.append(f"Elastic net (lambda={r['lambda']:.4f}, chosen by blocked "

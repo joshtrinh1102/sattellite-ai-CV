@@ -170,3 +170,20 @@ def test_days_to_lny_is_zero_on_the_day_and_capped_far_away():
     assert days_to_lny(date(2021, 2, 12)) == 0
     assert days_to_lny(date(2021, 2, 15)) == 3
     assert days_to_lny(date(2021, 7, 1)) == 90
+
+
+def test_partial_spearman_removes_a_seasonal_confound():
+    rng = np.random.default_rng(4)
+    n = 30
+    season = np.sin(np.linspace(0, 6 * np.pi, n))
+    y = 3 * season + rng.normal(scale=0.3, size=n)
+    seasonal_news = season + rng.normal(scale=0.2, size=n)     # rides the season only
+    real_news = rng.normal(size=n)
+    y = y + 1.5 * real_news
+    X = np.column_stack([seasonal_news, real_news, season])
+    res = analysis.partial_spearman_ranking(X, y, ["seasonal", "real", "season"],
+                                            test_idx=[0, 1], control_idx=[2], n_boot=300)
+    by = {r["factor"]: r for r in res["ranking"]}
+    assert by["real"]["partial_rho"] > 0.5 and by["real"]["rho_ci_low"] > 0
+    assert abs(by["seasonal"]["partial_rho"]) < 0.4
+    assert res["ranking"][0]["factor"] == "real"

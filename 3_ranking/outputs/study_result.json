@@ -1,91 +1,47 @@
 {
   "gate": {
-    "n_dates": 76,
-    "method": "elastic_net",
-    "description": "Regularised regression over all topics, ranked by effect size.",
-    "threshold": 60
+    "n_dates": 23,
+    "method": "two_group",
+    "description": "COVID vs normal comparison only. Nothing about individual factors.",
+    "threshold": 0
   },
-  "n_dates": 76,
+  "n_dates": 23,
   "dates": [
     "2018-09-16",
     "2018-10-16",
     "2018-10-31",
-    "2018-12-15",
-    "2018-12-30",
-    "2019-01-04",
-    "2019-01-19",
-    "2019-02-08",
     "2019-03-30",
     "2019-09-06",
     "2019-09-21",
-    "2019-10-06",
     "2019-10-26",
-    "2019-11-05",
     "2020-01-29",
     "2020-09-30",
     "2020-11-04",
-    "2020-11-09",
-    "2020-11-29",
-    "2020-12-19",
-    "2020-12-29",
-    "2021-02-17",
     "2021-02-22",
     "2021-02-27",
-    "2021-03-04",
-    "2021-03-24",
-    "2021-09-30",
-    "2021-10-05",
-    "2021-10-10",
-    "2021-10-15",
-    "2021-11-14",
-    "2021-12-19",
-    "2022-01-03",
-    "2022-01-23",
     "2022-02-07",
-    "2022-02-12",
-    "2022-03-09",
-    "2022-04-08",
     "2022-09-25",
     "2022-10-25",
-    "2022-10-30",
-    "2022-11-19",
-    "2022-12-09",
-    "2022-12-19",
     "2023-01-23",
-    "2023-02-07",
-    "2023-03-09",
-    "2023-09-25",
-    "2023-10-05",
     "2023-10-20",
-    "2023-11-09",
-    "2023-11-19",
-    "2023-12-14",
     "2024-01-08",
-    "2024-02-12",
-    "2024-03-08",
     "2024-04-02",
-    "2024-10-19",
-    "2024-11-03",
     "2024-11-08",
-    "2024-11-13",
     "2024-12-18",
     "2025-01-12",
-    "2025-03-08",
-    "2025-04-04",
-    "2025-10-29",
-    "2025-11-23",
-    "2025-11-28",
-    "2025-12-08",
-    "2025-12-28",
-    "2026-01-09",
-    "2026-02-01",
-    "2026-03-08",
-    "2026-03-18",
-    "2026-03-20",
-    "2026-04-07"
+    "2025-10-29"
   ],
-  "has_news_factors": false,
+  "has_news_factors": true,
+  "n_capture_dates": 76,
   "features": [
+    "share_economy_demand",
+    "share_supply_capacity",
+    "share_port_flow",
+    "share_policy_geopolitics",
+    "share_external_shocks",
+    "share_digital_reputation",
+    "tone_mean_relevant",
+    "news_volume",
     "wind_speed_10m_max_win_mean",
     "wind_gusts_10m_max_win_max",
     "precipitation_sum_win_mean",
@@ -99,6 +55,14 @@
   ],
   "level": "dimension",
   "weights": {
+    "share_economy_demand": 1.0,
+    "share_supply_capacity": 1.0,
+    "share_port_flow": 1.0,
+    "share_policy_geopolitics": 1.5,
+    "share_external_shocks": 1.5,
+    "share_digital_reputation": 1.0,
+    "tone_mean_relevant": 1.0,
+    "news_volume": 1.0,
     "wind_speed_10m_max_win_mean": 0.5,
     "wind_gusts_10m_max_win_max": 0.5,
     "precipitation_sum_win_mean": 0.5,
@@ -144,262 +108,70 @@
     }
   },
   "ranking": {
-    "lambda": 0.004012807031942776,
-    "cv_curve": [
-      [
-        0.001,
-        0.001248567473889674
-      ],
-      [
-        0.0013203517797162948,
-        0.001245832521486192
-      ],
-      [
-        0.0017433288221999873,
-        0.0012468118568227627
-      ],
-      [
-        0.0023018073130224677,
-        0.0012403924213216777
-      ],
-      [
-        0.0030391953823131978,
-        0.0012283831003597862
-      ],
-      [
-        0.004012807031942776,
-        0.0012128994328593227
-      ],
-      [
-        0.005298316906283708,
-        0.0012142039517806593
-      ],
-      [
-        0.006995642156712634,
-        0.0012286314754737322
-      ],
-      [
-        0.009236708571873866,
-        0.0012441367559526335
-      ],
-      [
-        0.012195704601594415,
-        0.0012617092683169726
-      ],
-      [
-        0.01610262027560939,
-        0.0012747622341754549
-      ],
-      [
-        0.021261123338996567,
-        0.0012763984007575619
-      ],
-      [
-        0.02807216203941177,
-        0.0012763984007575619
-      ],
-      [
-        0.037065129109221565,
-        0.0012763984007575619
-      ],
-      [
-        0.04893900918477494,
-        0.0012763984007575619
-      ],
-      [
-        0.06461670787466972,
-        0.0012763984007575619
-      ],
-      [
-        0.0853167852417281,
-        0.0012763984007575619
-      ],
-      [
-        0.11264816923358867,
-        0.0012763984007575619
-      ],
-      [
-        0.14873521072935117,
-        0.0012763984007575619
-      ],
-      [
-        0.196382800192977,
-        0.0012763984007575619
-      ],
-      [
-        0.2592943797404667,
-        0.0012763984007575619
-      ],
-      [
-        0.34235979576075837,
-        0.0012763984007575619
-      ],
-      [
-        0.45203536563602453,
-        0.0012763984007575619
-      ],
-      [
-        0.5968456995122311,
-        0.0012763984007575619
-      ],
-      [
-        0.7880462815669912,
-        0.0012763984007575619
-      ],
-      [
-        1.0404983103657852,
-        0.0012763984007575619
-      ],
-      [
-        1.3738237958832638,
-        0.0012763984007575619
-      ],
-      [
-        1.813930693911063,
-        0.0012763984007575619
-      ],
-      [
-        2.395026619987486,
-        0.0012763984007575619
-      ],
-      [
-        3.1622776601683795,
-        0.0012763984007575619
-      ]
-    ],
+    "method": "partial_spearman",
     "ranking": [
       {
-        "factor": "time_trend",
-        "weight": 1.0,
-        "enet_beta": -0.005242197245779867,
-        "selection_rate": 0.92,
-        "sign_consistency": 0.9125,
-        "boot_ci_low": -0.011744092177893383,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.20973265654116474,
-        "spearman_p": 0.06900513117648505,
-        "spearman_p_adj": 0.6900513117648505,
+        "factor": "share_port_flow",
+        "partial_rho": 0.5293190200129698,
+        "rho_ci_low": 0.11654360568131686,
+        "rho_ci_high": 0.7751079808221785,
+        "spearman_p": 0.019778005079068364,
+        "spearman_p_adj": 0.11866803047441019,
         "bh_survives": false
       },
       {
-        "factor": "month_sin",
-        "weight": 1.0,
-        "enet_beta": -0.0027989718683849255,
-        "selection_rate": 0.6975,
-        "sign_consistency": 0.695,
-        "boot_ci_low": -0.009043986968335712,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.14525233781075494,
-        "spearman_p": 0.21058958255763743,
-        "spearman_p_adj": 0.7019652751921247,
+        "factor": "share_economy_demand",
+        "partial_rho": 0.1887880602653176,
+        "rho_ci_low": -0.32981532244747713,
+        "rho_ci_high": 0.6602245934025758,
+        "spearman_p": 0.4389062807805777,
+        "spearman_p_adj": 0.9566931845505472,
         "bh_survives": false
       },
       {
-        "factor": "month_cos",
-        "weight": 1.0,
-        "enet_beta": -0.0006982852011565303,
-        "selection_rate": 0.6025,
-        "sign_consistency": 0.575,
-        "boot_ci_low": -0.007090577095198662,
-        "boot_ci_high": 0.00030737577493185987,
-        "spearman_rho": -0.0763459066098884,
-        "spearman_p": 0.5121489379721155,
-        "spearman_p_adj": 0.7554373540669119,
+        "factor": "share_external_shocks",
+        "partial_rho": -0.11486110306869941,
+        "rho_ci_low": -0.6034463866455273,
+        "rho_ci_high": 0.47016432173498574,
+        "spearman_p": 0.6396179498541945,
+        "spearman_p_adj": 0.9566931845505472,
         "bh_survives": false
       },
       {
-        "factor": "wind_speed_10m_max_day",
-        "weight": 0.5,
-        "enet_beta": -0.0002804851791322637,
-        "selection_rate": 0.4825,
-        "sign_consistency": 0.4825,
-        "boot_ci_low": -0.004956106166328656,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.06038295632579582,
-        "spearman_p": 0.6043498832535296,
-        "spearman_p_adj": 0.7554373540669119,
+        "factor": "share_policy_geopolitics",
+        "partial_rho": 0.09838835253437272,
+        "rho_ci_low": -0.38492098363235305,
+        "rho_ci_high": 0.5896566504747744,
+        "spearman_p": 0.6886230748468315,
+        "spearman_p_adj": 0.9566931845505472,
         "bh_survives": false
       },
       {
-        "factor": "wind_speed_10m_max_win_mean",
-        "weight": 0.5,
-        "enet_beta": 0.0,
-        "selection_rate": 0.2625,
-        "sign_consistency": 0.2625,
-        "boot_ci_low": 0.0,
-        "boot_ci_high": 0.00482479458874321,
-        "spearman_rho": 0.16122769864835276,
-        "spearman_p": 0.16411101209294784,
-        "spearman_p_adj": 0.7019652751921247,
+        "factor": "share_digital_reputation",
+        "partial_rho": -0.052048451413307384,
+        "rho_ci_low": -0.33617963393708994,
+        "rho_ci_high": 0.20517703046765956,
+        "spearman_p": 0.8324078788011638,
+        "spearman_p_adj": 0.9566931845505472,
         "bh_survives": false
       },
       {
-        "factor": "wind_gusts_10m_max_win_max",
-        "weight": 0.5,
-        "enet_beta": 0.0,
-        "selection_rate": 0.2625,
-        "sign_consistency": 0.2625,
-        "boot_ci_low": -0.005031070609904329,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.06652445673494245,
-        "spearman_p": 0.5680211666821235,
-        "spearman_p_adj": 0.7554373540669119,
-        "bh_survives": false
-      },
-      {
-        "factor": "days_to_lny",
-        "weight": 1.0,
-        "enet_beta": -0.0,
-        "selection_rate": 0.2475,
-        "sign_consistency": 0.1975,
-        "boot_ci_low": -0.005184933392409269,
-        "boot_ci_high": 0.0025552830242132857,
-        "spearman_rho": 0.027961091447393224,
-        "spearman_p": 0.8105115701761688,
-        "spearman_p_adj": 0.9005684113068543,
-        "bh_survives": false
-      },
-      {
-        "factor": "windy_days_win",
-        "weight": 0.5,
-        "enet_beta": 0.0,
-        "selection_rate": 0.13,
-        "sign_consistency": 0.1175,
-        "boot_ci_low": -0.003137286760463184,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.08808375377629665,
-        "spearman_p": 0.44926421177054815,
-        "spearman_p_adj": 0.7554373540669119,
-        "bh_survives": false
-      },
-      {
-        "factor": "precipitation_sum_win_mean",
-        "weight": 0.5,
-        "enet_beta": 0.0,
-        "selection_rate": 0.0775,
-        "sign_consistency": 0.0775,
-        "boot_ci_low": 0.0,
-        "boot_ci_high": 0.0013315830706632197,
-        "spearman_rho": -0.0012211985071374912,
-        "spearman_p": 0.9916465236462392,
-        "spearman_p_adj": 0.9916465236462392,
-        "bh_survives": false
-      },
-      {
-        "factor": "wet_days_win",
-        "weight": 0.5,
-        "enet_beta": 0.0,
-        "selection_rate": 0.065,
-        "sign_consistency": 0.035,
-        "boot_ci_low": -0.00031266107299525545,
-        "boot_ci_high": 0.00022242745628596436,
-        "spearman_rho": -0.0645903782690956,
-        "spearman_p": 0.5793509243955225,
-        "spearman_p_adj": 0.7554373540669119,
+        "factor": "share_supply_capacity",
+        "partial_rho": 0.013364990540567352,
+        "rho_ci_low": -0.5491210219203151,
+        "rho_ci_high": 0.5528217314205209,
+        "spearman_p": 0.9566931845505472,
+        "spearman_p_adj": 0.9566931845505472,
         "bh_survives": false
       }
     ],
-    "n": 76,
-    "n_features": 10
+    "n": 23,
+    "n_features": 6,
+    "controls": [
+      "days_to_lny",
+      "month_sin",
+      "month_cos",
+      "time_trend"
+    ]
   }
 }

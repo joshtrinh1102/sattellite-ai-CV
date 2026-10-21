@@ -1,6 +1,8 @@
 """Background refresh for the dashboard's Update button.
 
-    fetch   python -m factors.build --fetch-news   fill GDELT/weather gaps (hours;
+    fetch   python -m factors.build --fetch-news --capture-windows
+                                                   fill the news weeks before each capture
+                                                   date (minutes to an hour;
                                                    stoppable - the cache keeps progress)
     build   python -m factors.build                rebuild handoff/factors_daily.csv
                                                    from whatever is cached
@@ -22,7 +24,8 @@ from .config import FACTORS_DIR, ROOT
 
 PY = [sys.executable, "-u"]
 STEPS = (
-    ("fetch", "Fetch news + weather", PY + ["-m", "factors.build", "--fetch-news"],
+    ("fetch", "Fetch news + weather", PY + ["-m", "factors.build", "--fetch-news",
+                                         "--capture-windows"],
      FACTORS_DIR),
     ("build", "Rebuild daily factors from cache", PY + ["-m", "factors.build"],
      FACTORS_DIR),
