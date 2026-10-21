@@ -1,0 +1,108 @@
+{
+  "factors": {
+    "inflation_econ": {
+      "title": "Inflation & economic concerns",
+      "dimension": "economy_demand",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "material_shortages": {
+      "title": "Material shortages",
+      "dimension": "supply_capacity",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "natural_disasters": {
+      "title": "Natural disasters",
+      "dimension": "external_shocks",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "global_regulations": {
+      "title": "Global regulations",
+      "dimension": "policy_geopolitics",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "cybersecurity": {
+      "title": "Cybersecurity threats",
+      "dimension": "digital_reputation",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "logistics_reliability": {
+      "title": "Logistics reliability",
+      "dimension": "port_flow",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "labor_shortages": {
+      "title": "Labor shortages",
+      "dimension": "supply_capacity",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "demand_volatility": {
+      "title": "Demand volatility",
+      "dimension": "economy_demand",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "operational_risks": {
+      "title": "Operational risks",
+      "dimension": "supply_capacity",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "reputation_risks": {
+      "title": "Reputation risks",
+      "dimension": "digital_reputation",
+      "weight": 1.0,
+      "threshold": 2.0
+    },
+    "health_pandemic": {
+      "title": "Health / pandemic",
+      "dimension": "external_shocks",
+      "weight": 1.5,
+      "threshold": 2.0
+    },
+    "conflict_war": {
+      "title": "Conflict / war",
+      "dimension": "policy_geopolitics",
+      "weight": 1.5,
+      "threshold": 2.0
+    }
+  },
+  "dimensions": {
+    "economy_demand": {
+      "title": "Economy & demand",
+      "weight": 1.0
+    },
+    "supply_capacity": {
+      "title": "Supply & capacity",
+      "weight": 1.0
+    },
+    "port_flow": {
+      "title": "Port flow",
+      "weight": 1.0
+    },
+    "policy_geopolitics": {
+      "title": "Policy & geopolitics",
+      "weight": 1.5
+    },
+    "external_shocks": {
+      "title": "External shocks",
+      "weight": 1.5
+    },
+    "digital_reputation": {
+      "title": "Digital & reputation",
+      "weight": 1.0
+    }
+  },
+  "weights": {
+    "weather": 0.5,
+    "season": 1.0,
+    "trend": 1.0,
+    "news_summary": 1.0
+  }
+}

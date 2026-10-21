@@ -26,10 +26,21 @@ imports another's code. If a column changes, change it here first.
 | `temperature_2m_mean`, `precipitation_sum`, `wind_speed_10m_max`, `wind_gusts_10m_max` | Open-Meteo daily weather |
 | `news_covered` | 1 if GDELT was fetched for that day. **0 means missing, not zero news** |
 | `n_articles`, `n_relevant`, `tone_sum_relevant` | headline totals (blank when not covered) |
-| `count_<topic>` × 12 | relevant headlines per risk category |
+| `count_<factor>` | relevant headlines labelled with that factor (multi-label, so these can sum past `n_relevant`) |
+| `dim_<dimension>` | relevant headlines with any factor in that dimension, each counted once |
+
+Factors and dimensions are whatever `2_factors/factors.toml` defines, so the
+set of `count_` / `dim_` columns changes when that file does.
 
 Daily counts, not shares: 3_ranking builds shares and weather summaries over
 the 7 days before each capture date.
+
+## factor_definitions.json — written by 2_factors alongside the CSV
+
+`factors.toml` without the keywords: each factor's title, dimension, weight and
+threshold, each dimension's title and weight, and the model weights for the
+non-news families (`weather`, `season`, `trend`, `news_summary`). 3_ranking
+reads the weights from here; if the file is missing every weight is 1.0.
 
 ## detections/
 

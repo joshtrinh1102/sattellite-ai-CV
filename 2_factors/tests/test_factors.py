@@ -92,3 +92,67 @@ def test_daily_scores_counts_exclude_irrelevant():
     assert row["n_articles"] == 3 and row["n_relevant"] == 2
     assert row["count_labor_shortages"] == 1
     assert row["count_logistics_reliability"] == 1
+
+
+# --------------------------------------------------------------------------
+# factors.toml - multi-label and the editable taxonomy
+# --------------------------------------------------------------------------
+
+def test_one_headline_can_carry_several_factors():
+    c = topics.classify("ILWU strike worsens port congestion")
+    assert set(c["labels"]) >= {"labor_shortages", "logistics_reliability"}
+    assert c["dimensions"][0] in {"supply_capacity", "port_flow"}
+
+
+def test_daily_dimension_counts_do_not_double_count():
+    # operational + labour are both supply_capacity: two factor counts, one dimension count
+    articles = [{"date": "2021-10-10", "url": "u1",
+                 "title": "Crane collapse and ILWU strike shut terminal"}]
+    _, daily = topics.daily_scores(articles)
+    row = daily.iloc[0]
+    assert row["count_operational_risks"] == 1 and row["count_labor_shortages"] == 1
+    assert row["dim_supply_capacity"] == 1
+
+
+def test_keyword_syntax_whole_word_prefix_and_regex():
+    assert topics.compile_keyword("war").search("trade war looms")
+    assert not topics.compile_keyword("war").search("warehouse fire")
+    assert topics.compile_keyword("regulat*").search("new regulatory push")
+    assert topics.compile_keyword(r"re:\bcyber ?attack").search("cyberattack hits")
+
+
+def _write(tmp_path, body):
+    p = tmp_path / "factors.toml"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_taxonomy_loads_thresholds_and_weights(tmp_path):
+    tax = topics.load_taxonomy(_write(tmp_path, """
+[settings]
+default_threshold = 2.0
+[weights]
+weather = 0.5
+[dimensions.ops]
+weight = 2.0
+[factors.cranes]
+dimension = "ops"
+threshold = 3.0
+decisive = ["crane collapse*"]
+supporting = ["crane"]
+"""))
+    assert tax.weights["weather"] == 0.5 and tax.dimensions["ops"]["weight"] == 2.0
+    assert topics.classify("Crane collapse at pier", tax)["labels"] == ["cranes"]
+    assert topics.classify("New crane arrives", tax)["label"] == "irrelevant"  # 1 < 3
+
+
+@pytest.mark.parametrize("body,needle", [
+    ('[dimensions.a]\n[factors.x]\ndimension = "nope"\nstrong = ["x"]', "dimension"),
+    ('[dimensions.a]\n[factors.x]\ndimension = "a"', "no keywords"),
+    ('[dimensions.a]\n[factors.x]\ndimension = "a"\nweight = 0\nstrong = ["x"]', "> 0"),
+    ('[dimensions.a]\n[factors.X-1]\ndimension = "a"\nstrong = ["x"]', "lowercase"),
+    ('[dimensions.a]\n[factors.x]\ndimension = "a"\nstrong = ["re:(unclosed"]', "bad pattern"),
+])
+def test_taxonomy_errors_name_the_problem(tmp_path, body, needle):
+    with pytest.raises(ValueError, match=needle):
+        topics.load_taxonomy(_write(tmp_path, body))

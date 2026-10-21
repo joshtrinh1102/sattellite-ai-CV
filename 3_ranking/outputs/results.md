@@ -26,44 +26,28 @@ No usable dates fall in: **covid_collapse**. This is the haze screen biting, not
 
 ## Factor ranking
 
-Elastic net (lambda=0.0023, chosen by blocked time-series CV) over 10 candidate factors on 76 dates, with bootstrap resampling for stability.
+Elastic net (lambda=0.0040, chosen by blocked time-series CV) over 10 candidate factors on 76 dates, with bootstrap resampling for stability.
 
 Read `selection_rate` first: it is how often the factor survives regularisation under resampling. A large coefficient selected half the time is noise with a number attached.
 
-| factor | coef | selection rate | sign consistency | Spearman rho | p (BH-adj) |
-|---|---:|---:|---:|---:|---:|
-| wind_speed_10m_max_day | -0.006 | 0.95 | 0.95 | -0.06 | 0.755 |
-| wind_speed_10m_max_win_mean | +0.011 | 0.94 | 0.94 | +0.16 | 0.702 |
-| wind_gusts_10m_max_win_max | -0.007 | 0.82 | 0.82 | -0.07 | 0.755 |
-| month_sin | -0.004 | 0.81 | 0.80 | -0.15 | 0.702 |
-| time_trend | -0.003 | 0.77 | 0.70 | -0.21 | 0.690 |
-| month_cos | -0.000 | 0.60 | 0.52 | -0.08 | 0.755 |
-| windy_days_win | -0.001 | 0.58 | 0.52 | -0.09 | 0.755 |
-| precipitation_sum_win_mean | +0.001 | 0.56 | 0.53 | -0.00 | 0.992 |
-| wet_days_win | +0.000 | 0.49 | 0.30 | -0.06 | 0.755 |
-| days_to_lny | -0.000 | 0.49 | 0.43 | +0.03 | 0.901 |
+**Importance weights are in effect** (from `2_factors/factors.toml`): `wind_speed_10m_max_win_mean` x0.5, `wind_gusts_10m_max_win_max` x0.5, `precipitation_sum_win_mean` x0.5, `windy_days_win` x0.5, `wet_days_win` x0.5, `wind_speed_10m_max_day` x0.5. A weight above 1 shrinks that factor less, so the multivariate model is tilted toward keeping it. That is a prior, not evidence; the Spearman test and its BH correction ignore weights entirely.
 
-**4 of 10 candidate factors** are selected in at least 80% of bootstrap resamples with a non-zero coefficient, and **0** survive Benjamini-Hochberg correction on the univariate test.
+| factor | weight | coef | selection rate | sign consistency | Spearman rho | p (BH-adj) |
+|---|---:|---:|---:|---:|---:|---:|
+| time_trend | 1 | -0.005 | 0.92 | 0.91 | -0.21 | 0.690 |
+| month_sin | 1 | -0.003 | 0.70 | 0.69 | -0.15 | 0.702 |
+| month_cos | 1 | -0.001 | 0.60 | 0.57 | -0.08 | 0.755 |
+| wind_speed_10m_max_day | 0.5 | -0.000 | 0.48 | 0.48 | -0.06 | 0.755 |
+| wind_speed_10m_max_win_mean | 0.5 | +0.000 | 0.26 | 0.26 | +0.16 | 0.702 |
+| wind_gusts_10m_max_win_max | 0.5 | +0.000 | 0.26 | 0.26 | -0.07 | 0.755 |
+| days_to_lny | 1 | -0.000 | 0.25 | 0.20 | +0.03 | 0.901 |
+| windy_days_win | 0.5 | +0.000 | 0.13 | 0.12 | -0.09 | 0.755 |
+| precipitation_sum_win_mean | 0.5 | +0.000 | 0.08 | 0.08 | -0.00 | 0.992 |
+| wet_days_win | 0.5 | +0.000 | 0.07 | 0.04 | -0.06 | 0.755 |
 
-Selection rate alone is not a finding here. The cross-validated penalty came out very small (lambda=0.0023), which is what happens when no feature predicts well: the CV has nothing to gain by shrinking, so almost every coefficient stays non-zero and selection rates run high across the board. The coefficients themselves are near zero and no factor survives multiple-comparison correction. The honest reading is that **none of these factors shows a detectable association with ship density** at this sample size.
+**1 of 10 candidate factors** are selected in at least 80% of bootstrap resamples with a non-zero coefficient, and **0** survive Benjamini-Hochberg correction on the univariate test.
 
-## Factor attribution for 2021-10-10
-
-- Observed: **0.263** ships/km2
-- Model: 0.146 (baseline 0.135, residual +0.117)
-
-| factor | value | z | coef | contribution |
-|---|---:|---:|---:|---:|
-| wind_gusts_10m_max_win_max | 9.900 | -0.68 | -0.007 | +0.0045 |
-| month_sin | -1.000 | -1.04 | -0.004 | +0.0041 |
-| wind_speed_10m_max_day | 5.210 | +0.22 | -0.006 | -0.0014 |
-| wind_speed_10m_max_win_mean | 5.007 | +0.12 | +0.011 | +0.0013 |
-| time_trend | 3.066 | -0.36 | -0.003 | +0.0012 |
-| windy_days_win | 0.000 | -0.75 | -0.001 | +0.0010 |
-| precipitation_sum_win_mean | 0.386 | -0.30 | +0.001 | -0.0003 |
-| month_cos | -0.000 | -0.98 | -0.000 | +0.0000 |
-
-Contributions are `coef x standardised value`, so they sum with the baseline to the model's prediction. They are attribution under the fitted model, not causes. A large residual means the day was driven by something outside the feature set.
+Selection rate alone is not a finding here. The cross-validated penalty came out very small (lambda=0.0040), which is what happens when no feature predicts well: the CV has nothing to gain by shrinking, so almost every coefficient stays non-zero and selection rates run high across the board. The coefficients themselves are near zero and no factor survives multiple-comparison correction. The honest reading is that **none of these factors shows a detectable association with ship density** at this sample size.
 
 ## News factors are absent from this run
 

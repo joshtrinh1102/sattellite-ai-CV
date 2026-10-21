@@ -10,20 +10,28 @@ One row per day. Columns:
     wind_speed_10m_max, wind_gusts_10m_max
     news_covered                                 1 if GDELT was fetched for the day
     n_articles, n_relevant, tone_sum_relevant    news totals
-    count_<topic> x 12                           relevant headlines per risk category
+    count_<factor>                               relevant headlines labelled with it
+    dim_<dimension>                              relevant headlines in that dimension
+
+Factors and dimensions come from factors.toml (multi-label, so count_ columns
+can sum past n_relevant). Also writes handoff/factor_definitions.json - the
+titles, dimensions and weights from that file - so 3_ranking never has to read
+this folder.
 
 A day with news_covered = 0 has MISSING news, not zero news.
 """
 
 import argparse
 import csv
+import json
 from datetime import date, timedelta
 
 from . import news, topics, weather
-from .config import ARTICLES, FACTORS_DAILY, PORT_BBOX, WEATHER_CACHE
+from .config import ARTICLES, FACTOR_DEFS, FACTORS_DAILY, PORT_BBOX, WEATHER_CACHE
 
 NEWS_COLS = (["n_articles", "n_relevant", "tone_sum_relevant"]
-             + [f"count_{t}" for t in topics.RISK_LABELS])
+             + [f"count_{t}" for t in topics.RISK_LABELS]
+             + [f"dim_{d}" for d in topics.DIMENSIONS])
 
 
 def build(port, start, end, fetch_news=False):
@@ -55,7 +63,14 @@ def build(port, start, end, fetch_news=False):
         wr = csv.DictWriter(fh, fieldnames=list(rows[0]))
         wr.writeheader()
         wr.writerows(rows)
+    FACTOR_DEFS.write_text(json.dumps(topics.TAXONOMY.definitions(), indent=2),
+                           encoding="utf-8")
     print(f"\nWrote {len(rows)} days -> {FACTORS_DAILY}")
+    if not art_df.empty:
+        rel = art_df[art_df["label"] != "irrelevant"]
+        multi = (rel["labels"].str.count(";") > 0).sum()
+        print(f"Headlines: {len(art_df)} total, {len(rel)} relevant, "
+              f"{multi} with more than one factor")
     return rows
 
 

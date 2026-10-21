@@ -13,10 +13,14 @@ CACHE = ROOT / "cache"         # raw API responses, so rebuilds work offline
 NEWS_RAW = CACHE / "news_raw"  # untouched GDELT responses
 WEATHER_CACHE = CACHE / "weather_cache.json"
 OUTPUTS = ROOT / "outputs"
-ARTICLES = OUTPUTS / "articles.csv"   # every headline with its category
+ARTICLES = OUTPUTS / "articles.csv"   # every headline with its factor labels
+
+# The editable taxonomy: factors, dimensions, keywords, thresholds, weights.
+FACTORS_FILE = ROOT / "factors.toml"
 
 # Handoff contract - see handoff/README.md
 FACTORS_DAILY = HANDOFF / "factors_daily.csv"
+FACTOR_DEFS = HANDOFF / "factor_definitions.json"   # factors.toml, minus keywords
 
 # Port areas of interest, as (min_lon, min_lat, max_lon, max_lat). Kept here
 # rather than imported from 1_ship_detection so the folders stay independent;

@@ -1,188 +1,177 @@
-"""Component 3 Stage A - article title -> 1 of 13 risk categories.
+"""Component 3 Stage A - article title -> risk factors (multi-label).
 
-Taxonomy and structure follow 3_ranking/plan-topics.md: the 10 NetSuite supply
-chain risk categories from settings/requirements.md, plus Health/Pandemic and
-Conflict/War (decision Q8), plus an explicit `irrelevant` escape hatch (Q11) so
-port-authority appointments and cruise-terminal puff pieces do not get forced
-into an operational bucket.
+The taxonomy is NOT in this file. It lives in 2_factors/factors.toml, which is
+meant to be edited by hand: factors, the dimensions they roll up into, their
+keywords and thresholds, and the model weights 3_ranking applies. Changing that
+file and rebuilding re-labels every cached headline without re-fetching.
 
 WHICH RUNG OF THE LADDER THIS IS
 --------------------------------
-The plan lists three label sources (Q7). This module implements option 2,
-**keyword rules** - free, fully reproducible, noisier than the LLM labelling
-the plan recommends. It is the baseline the plan says to build first, not the
-finished Stage A classifier: the TF-IDF and transformer rungs above it are
+3_ranking/plan-topics.md lists three label sources (Q7). This module implements
+option 2, **keyword rules** - free, fully reproducible, noisier than the LLM
+labelling the plan recommends. The TF-IDF and transformer rungs above it are
 still unbuilt, and so is the 300-title gold set the plan calls non-negotiable.
 The honest reading of any ranking downstream is therefore "ranked using
 rule-assigned topics", and category precision is the limiting factor, not the
 impact model.
 
-Scoring is deliberately not a bag of independent keyword hits:
+MULTI-LABEL
+-----------
+A headline gets EVERY factor whose score reaches that factor's threshold
+("ILWU strike worsens port congestion" is both labor and logistics). The
+strongest one is kept as `label` so the single-label view is still available.
+A headline that reaches no threshold is `irrelevant` - the escape hatch (Q11)
+that keeps port-authority appointments and cruise-terminal puff pieces out of
+the operational buckets.
 
-  * cues are weighted - "ilwu" is decisive for Labor, "workers" is not;
-  * phrases beat single words, so "empty container" does not also fire
-    Material Shortages via the bare word "container" in every logistics story;
-  * a minimum score is required before any operational label is assigned,
-    which is what routes genuinely off-topic articles to `irrelevant` rather
-    than to whichever category happened to have the loosest keyword.
+Scoring is deliberately not a bag of equal keyword hits:
+
+  * keywords are tiered - "ilwu" is decisive for Labor, "workers" is not;
+  * phrases are listed separately from the words in them, so "empty container"
+    can be decisive for Material Shortages without the bare word "container"
+    firing in every logistics story;
+  * a minimum score is required before a factor is assigned, which is what
+    routes genuinely off-topic articles to `irrelevant`.
 """
 
 import re
+import tomllib
+from dataclasses import dataclass, field
 
-# The 12 operational categories, in the plan's order, plus the escape hatch.
-LABELS = (
-    "inflation_econ",
-    "material_shortages",
-    "natural_disasters",
-    "global_regulations",
-    "cybersecurity",
-    "logistics_reliability",
-    "labor_shortages",
-    "demand_volatility",
-    "operational_risks",
-    "reputation_risks",
-    "health_pandemic",
-    "conflict_war",
-    "irrelevant",
-)
+from .config import FACTORS_FILE
 
-RISK_LABELS = LABELS[:-1]
-
-LABEL_TITLES = {
-    "inflation_econ": "Inflation & economic concerns",
-    "material_shortages": "Material shortages",
-    "natural_disasters": "Natural disasters",
-    "global_regulations": "Global regulations",
-    "cybersecurity": "Cybersecurity threats",
-    "logistics_reliability": "Logistics reliability",
-    "labor_shortages": "Labor shortages",
-    "demand_volatility": "Demand volatility",
-    "operational_risks": "Operational risks",
-    "reputation_risks": "Reputation risks",
-    "health_pandemic": "Health / pandemic",
-    "conflict_war": "Conflict / war",
-    "irrelevant": "Irrelevant",
-}
-
-# weight 3 = decisive on its own, 2 = strong, 1 = supporting evidence only.
-CUES = {
-    "inflation_econ": [
-        (3, r"\bfreight rate|\bspot rate|\bcharter rate|\bbunker (?:price|cost)"),
-        (2, r"\binflation|\brecession|\bfuel (?:price|cost|surcharge)|\bdiesel price"),
-        (2, r"\beconomic downturn|\bconsumer price|\bcost of living|\binterest rate"),
-        (1, r"\beconomy|\bcosts? (?:rise|soar|surge|climb)|\bprofit|\bearnings"),
-    ],
-    "material_shortages": [
-        (3, r"\bchassis shortage|\bcontainer shortage|\bequipment shortage"),
-        (3, r"\bempty container|\bempties\b|\bbox shortage"),
-        (2, r"\bshortage of|\bsemiconductor|\bchip shortage|\braw material"),
-        (1, r"\bshortage|\bscarcity"),
-    ],
-    "natural_disasters": [
-        (3, r"\bhurricane|\btyphoon|\bearthquake|\btsunami|\bwildfire\b"),
-        (3, r"\bdense fog|\bfog (?:closure|delay)|\bstorm (?:closes|shuts|halts)"),
-        (2, r"\bflood|\bstorm\b|\bhigh winds?\b|\bgale|\bheavy rain|\bdrought"),
-        (1, r"\bweather (?:delay|disrupt|close)|\bsevere weather"),
-    ],
-    "global_regulations": [
-        (3, r"\btariff|\bsanction|\bcustoms rule|\bimport dut|\btrade war"),
-        (3, r"\bemissions? (?:rule|regulation|standard)|\bimo 2020|\bcarbon tax"),
-        (2, r"\bregulat|\blegislation|\bpolicy change|\bexecutive order|\bban on"),
-        (1, r"\bcompliance|\bmandate|\bfederal maritime"),
-    ],
-    "cybersecurity": [
-        (3, r"\bransomware|\bcyber ?attack|\bcybersecurity|\bdata breach"),
-        (2, r"\bhackers?\b|\bhacked|\bmalware|\bphishing|\bit outage"),
-        (1, r"\bcyber\b|\bsecurity breach"),
-    ],
-    "logistics_reliability": [
-        (3, r"\bcongestion|\bbacklog|\bbottleneck|\bdwell time|\bberth (?:delay|wait)"),
-        (3, r"\bblank sailing|\bschedule reliability|\bat anchor\b|\bqueue of ships"),
-        (2, r"\bdelay|\bgridlock|\bpile ?up|\bturn time|\bwait time|\blogjam"),
-        (2, r"\bsupply chain (?:crisis|disruption|snarl|mess|woes)"),
-        (1, r"\bthroughput|\bvessel traffic|\bport traffic|\bqueue"),
-    ],
-    "labor_shortages": [
-        (3, r"\bilwu\b|\bstrike\b|\bwalkout|\bwork stoppage|\bpicket|\block ?out"),
-        (3, r"\blabou?r (?:dispute|action|contract|negotiation|shortage|unrest)"),
-        (2, r"\bunion\b|\bdockworker|\blongshore|\bstaffing|\bworker shortage"),
-        (2, r"\bdriver shortage|\btrucker (?:shortage|protest)"),
-        (1, r"\bworkers?\b|\bhiring|\bwages?\b"),
-    ],
-    "demand_volatility": [
-        (3, r"\bimport surge|\bcargo surge|\bpeak season|\brecord (?:imports|volume|cargo)"),
-        (3, r"\border cancellation|\bdemand (?:slump|collapse|drop|surge)"),
-        (2, r"\bvolumes? (?:rise|fall|drop|plunge|jump|surge|slide)|\brestocking|\bdestocking"),
-        (1, r"\bdemand\b|\bconsumer spending|\bretail sales"),
-    ],
-    "operational_risks": [
-        (3, r"\bcrane (?:failure|collapse|accident)|\bterminal (?:outage|shutdown|closure)"),
-        (3, r"\ballision|\bgrounding|\bcapsiz|\bcollision|\bvessel fire|\boil spill"),
-        (2, r"\bbreakdown|\bmalfunction|\bequipment failure|\bpower outage|\bderail"),
-        (2, r"\baccident|\bexplosion|\bcontainers? lost|\bran aground"),
-        (1, r"\bmaintenance|\brepair|\bdredging|\bincident"),
-    ],
-    "reputation_risks": [
-        (3, r"\bboycott|\besg\b|\bgreenwash|\bforced labou?r|\bhuman rights"),
-        (2, r"\blawsuit|\bprotest against|\bscandal|\bpublic backlash|\bfined for"),
-        (1, r"\bcriticism|\breputation|\bcommunity (?:opposition|concern)|\bpollution"),
-    ],
-    "health_pandemic": [
-        (3, r"\bcovid|\bcoronavirus|\bpandemic|\bquarantine|\bomicron|\bdelta variant"),
-        (3, r"\bcrew change crisis|\bcrew (?:stranded|change)"),
-        (2, r"\block ?down|\boutbreak|\bvaccine|\bvaccination|\bepidemic|\binfection"),
-        (1, r"\bhealth (?:order|protocol)|\bmask mandate"),
-    ],
-    "conflict_war": [
-        (3, r"\bred sea|\bhouthi|\bblockade|\bwar risk|\bwar ?zone|\bmissile"),
-        (2, r"\bwar\b|\binvasion|\bconflict|\bmilitary|\bpiracy|\bhijack"),
-        (2, r"\bukraine|\brussia|\bgaza|\bisrael|\bsuez"),
-        (1, r"\bgeopolitic|\btension"),
-    ],
-}
-
-COMPILED = {
-    label: [(w, re.compile(pat)) for w, pat in cues] for label, cues in CUES.items()
-}
-
-# Below this, nothing operational was actually said -> irrelevant.
-MIN_SCORE = 2.0
+TIER_POINTS = {"decisive": 3.0, "strong": 2.0, "supporting": 1.0}
+WEIGHT_FAMILIES = ("weather", "season", "trend", "news_summary")
+_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def score_title(title):
-    """Return {label: score} over the 12 operational categories."""
-    text = " " + re.sub(r"[^a-z0-9 ]+", " ", title.lower()) + " "
-    text = " ".join(text.split())
-    scores = {}
-    for label, cues in COMPILED.items():
-        total = 0.0
-        for weight, pattern in cues:
-            if pattern.search(text):
-                total += weight
-        scores[label] = total
-    return scores
+@dataclass
+class Factor:
+    key: str
+    title: str
+    dimension: str
+    weight: float
+    threshold: float
+    cues: list = field(default_factory=list)      # [(points, compiled pattern)]
 
 
-def classify(title):
-    """Single dominant label per article (decision Q6), plus the runner-up.
+@dataclass
+class Taxonomy:
+    factors: dict          # key -> Factor, in file order
+    dimensions: dict       # key -> {"title", "weight"}
+    weights: dict          # non-news feature families -> weight
 
-    The plan asks for the runner-up to be stored even though nothing consumes
-    it today - it is free, and it is what makes the single-label decision
-    revisitable without re-labelling.
+    def definitions(self):
+        """The part 3_ranking needs, written to the handoff as JSON."""
+        return {
+            "factors": {k: {"title": f.title, "dimension": f.dimension,
+                            "weight": f.weight, "threshold": f.threshold}
+                        for k, f in self.factors.items()},
+            "dimensions": self.dimensions,
+            "weights": self.weights,
+        }
+
+
+def compile_keyword(entry):
+    """Keyword syntax from factors.toml -> regex over the normalised title."""
+    entry = entry.strip()
+    if entry.startswith("re:"):
+        return re.compile(entry[3:])
+    text = " ".join(re.sub(r"[^a-z0-9* ]+", " ", entry.lower()).split())
+    prefix = text.endswith("*")
+    body = re.escape(text.rstrip("*").rstrip())
+    return re.compile(r"\b" + body + ("" if prefix else r"\b"))
+
+
+def load_taxonomy(path=FACTORS_FILE):
+    """Read and validate factors.toml. Errors name the offending entry."""
+    with open(path, "rb") as fh:
+        raw = tomllib.load(fh)
+
+    def positive(value, where):
+        value = float(value)
+        if value <= 0:
+            raise ValueError(f"{path.name}: {where} must be > 0, got {value}")
+        return value
+
+    default_threshold = float(raw.get("settings", {}).get("default_threshold", 2.0))
+    weights = {fam: positive(raw.get("weights", {}).get(fam, 1.0), f"weights.{fam}")
+               for fam in WEIGHT_FAMILIES}
+
+    dimensions = {}
+    for key, d in raw.get("dimensions", {}).items():
+        if not _KEY.match(key):
+            raise ValueError(f"{path.name}: dimension key {key!r} must be lowercase_with_underscores")
+        dimensions[key] = {"title": d.get("title", key),
+                           "weight": positive(d.get("weight", 1.0), f"dimensions.{key}.weight")}
+
+    factors = {}
+    for key, f in raw.get("factors", {}).items():
+        if not _KEY.match(key) or key == "irrelevant":
+            raise ValueError(f"{path.name}: factor key {key!r} must be lowercase_with_underscores "
+                             "and not 'irrelevant'")
+        dim = f.get("dimension")
+        if dim not in dimensions:
+            raise ValueError(f"{path.name}: factors.{key}.dimension = {dim!r} is not one of "
+                             f"{sorted(dimensions)}")
+        cues = []
+        for tier, points in TIER_POINTS.items():
+            for entry in f.get(tier, []):
+                try:
+                    cues.append((points, compile_keyword(entry)))
+                except re.error as exc:
+                    raise ValueError(f"{path.name}: factors.{key}.{tier}: bad pattern "
+                                     f"{entry!r} ({exc})") from None
+        if not cues:
+            raise ValueError(f"{path.name}: factors.{key} has no keywords")
+        factors[key] = Factor(
+            key=key, title=f.get("title", key), dimension=dim,
+            weight=positive(f.get("weight", 1.0), f"factors.{key}.weight"),
+            threshold=positive(f.get("threshold", default_threshold),
+                               f"factors.{key}.threshold"),
+            cues=cues)
+    if not factors:
+        raise ValueError(f"{path.name}: no [factors.*] defined")
+    return Taxonomy(factors, dimensions, weights)
+
+
+TAXONOMY = load_taxonomy()
+RISK_LABELS = tuple(TAXONOMY.factors)
+DIMENSIONS = tuple(TAXONOMY.dimensions)
+LABELS = RISK_LABELS + ("irrelevant",)
+LABEL_TITLES = {**{k: f.title for k, f in TAXONOMY.factors.items()},
+                "irrelevant": "Irrelevant"}
+
+
+def _normalise(title):
+    return " ".join(re.sub(r"[^a-z0-9 ]+", " ", title.lower()).split())
+
+
+def score_title(title, taxonomy=None):
+    """Return {factor: points} - each matching keyword adds its tier's points."""
+    tax = taxonomy or TAXONOMY
+    text = _normalise(title)
+    return {key: sum(pts for pts, pat in f.cues if pat.search(text))
+            for key, f in tax.factors.items()}
+
+
+def classify(title, taxonomy=None):
+    """Every factor at or above its threshold, strongest first.
+
+    `label` is the strongest, kept so single-label consumers and the old
+    articles.csv column still work; `labels` is the full multi-label set.
     """
-    scores = score_title(title)
-    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
-    top_label, top_score = ranked[0]
-    if top_score < MIN_SCORE:
-        return {"label": "irrelevant", "score": float(top_score),
-                "runner_up": None, "runner_up_score": 0.0}
-    runner_up, runner_score = ranked[1]
-    return {
-        "label": top_label,
-        "score": float(top_score),
-        "runner_up": runner_up if runner_score > 0 else None,
-        "runner_up_score": float(runner_score),
-    }
+    tax = taxonomy or TAXONOMY
+    scores = score_title(title, tax)
+    hits = sorted(((k, s) for k, s in scores.items() if s >= tax.factors[k].threshold),
+                  key=lambda kv: (-kv[1], kv[0]))
+    if not hits:
+        return {"label": "irrelevant", "labels": [], "score": float(max(scores.values())),
+                "dimensions": []}
+    labels = [k for k, _ in hits]
+    dims = list(dict.fromkeys(tax.factors[k].dimension for k in labels))
+    return {"label": labels[0], "labels": labels, "score": float(hits[0][1]),
+            "dimensions": dims}
 
 
 # ---------------------------------------------------------------------------
@@ -216,31 +205,39 @@ def title_tone(title):
     return (pos - neg) / (pos + neg)
 
 
-def daily_scores(articles):
-    """Classify every headline and count them per day and category.
+def daily_scores(articles, taxonomy=None):
+    """Classify every headline and count them per day, factor and dimension.
 
     `articles` is the row list from `factors.news.collect`. Returns
     (labelled_articles_df, daily_df) with one daily row per date:
 
         n_articles, n_relevant         totals for the day
-        count_<topic>                  relevant articles with that dominant topic
+        count_<factor>                 relevant articles labelled with that factor
+        dim_<dimension>                relevant articles with ANY factor in it
         tone_sum_relevant              summed title tone over relevant articles
+
+    Multi-label means count_ columns can add up to more than n_relevant. The
+    dim_ columns count each article once per dimension, so two labels in the
+    same dimension are not double-counted - which is why they are computed
+    here and not by summing count_ columns downstream.
 
     Counts and sums rather than shares and means, because they aggregate
     exactly: a 7-day share is sum(count) / sum(n_relevant) over the window,
     which 3_ranking computes. Articles labelled `irrelevant` stay out of
-    n_relevant - they are the escape hatch, not a thirteenth risk.
+    n_relevant - they are the escape hatch, not another risk.
     """
     import pandas as pd
 
+    tax = taxonomy or TAXONOMY
     rows = []
     for a in articles:
-        c = classify(a["title"])
+        c = classify(a["title"], tax)
         rows.append({
             **a,
             "label": c["label"],
+            "labels": ";".join(c["labels"]),
+            "dimensions": ";".join(c["dimensions"]),
             "label_score": c["score"],
-            "runner_up": c["runner_up"],
             "tone": title_tone(a["title"]),
         })
     df = pd.DataFrame(rows)
@@ -250,14 +247,18 @@ def daily_scores(articles):
     out = []
     for day, grp in df.groupby("date"):
         relevant = grp[grp["label"] != "irrelevant"]
+        labels = [set(s.split(";")) for s in relevant["labels"]]
+        dims = [set(s.split(";")) for s in relevant["dimensions"]]
         rec = {
             "date": day,
             "n_articles": len(grp),
             "n_relevant": len(relevant),
             "tone_sum_relevant": float(relevant["tone"].sum()),
         }
-        for label in RISK_LABELS:
-            rec[f"count_{label}"] = int((relevant["label"] == label).sum())
+        for key in tax.factors:
+            rec[f"count_{key}"] = sum(key in ls for ls in labels)
+        for key in tax.dimensions:
+            rec[f"dim_{key}"] = sum(key in ds for ds in dims)
         out.append(rec)
 
     return df, pd.DataFrame(out).sort_values("date").reset_index(drop=True)

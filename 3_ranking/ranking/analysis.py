@@ -69,7 +69,7 @@ def ols_with_ci(X, y, alpha=0.05):
     }
 
 
-def elastic_net(Z, y, lam, l1_ratio=0.5, n_iter=2000, tol=1e-7):
+def elastic_net(Z, y, lam, l1_ratio=0.5, n_iter=2000, tol=1e-7, penalty=None):
     """Coordinate-descent elastic net on standardised Z and centred y.
 
     Standard soft-thresholding update. Z must be standardised, which makes the
@@ -81,14 +81,15 @@ def elastic_net(Z, y, lam, l1_ratio=0.5, n_iter=2000, tol=1e-7):
     beta = np.zeros(p)
     r = y - Z @ beta
     col_ss = (Z ** 2).sum(axis=0)
-    l1, l2 = lam * l1_ratio, lam * (1 - l1_ratio)
+    pf = np.ones(p) if penalty is None else np.asarray(penalty, dtype="float64")
+    l1, l2 = lam * l1_ratio * pf, lam * (1 - l1_ratio) * pf
     for _ in range(n_iter):
         delta = 0.0
         for j in range(p):
             if col_ss[j] <= 1e-12:
                 continue
             rho = Z[:, j] @ (r + Z[:, j] * beta[j]) / n
-            new = np.sign(rho) * max(abs(rho) - l1, 0.0) / (col_ss[j] / n + l2)
+            new = np.sign(rho) * max(abs(rho) - l1[j], 0.0) / (col_ss[j] / n + l2[j])
             if new != beta[j]:
                 r -= Z[:, j] * (new - beta[j])
                 delta = max(delta, abs(new - beta[j]))
@@ -117,7 +118,7 @@ def blocked_folds(n, k=5):
     return [np.arange(bounds[i], bounds[i + 1]) for i in range(k)]
 
 
-def cv_elastic_net(Z, y, lambdas=None, l1_ratio=0.5, k=5):
+def cv_elastic_net(Z, y, lambdas=None, l1_ratio=0.5, k=5, penalty=None):
     """Pick lambda by blocked CV; return (best_lambda, curve)."""
     lambdas = np.logspace(-3, 0.5, 30) if lambdas is None else lambdas
     folds = blocked_folds(len(y), k=k)
@@ -129,7 +130,7 @@ def cv_elastic_net(Z, y, lambdas=None, l1_ratio=0.5, k=5):
             if len(tr) < 3 or len(f) == 0:
                 continue
             ym = y[tr].mean()
-            b = elastic_net(Z[tr], y[tr] - ym, lam, l1_ratio)
+            b = elastic_net(Z[tr], y[tr] - ym, lam, l1_ratio, penalty=penalty)
             pred = Z[f] @ b + ym
             errs.append(float(np.mean((y[f] - pred) ** 2)))
         curve.append((float(lam), float(np.mean(errs)) if errs else np.inf))
@@ -137,7 +138,7 @@ def cv_elastic_net(Z, y, lambdas=None, l1_ratio=0.5, k=5):
     return best, curve
 
 
-def bootstrap_coefficients(Z, y, lam, l1_ratio=0.5, n_boot=400, seed=0):
+def bootstrap_coefficients(Z, y, lam, l1_ratio=0.5, n_boot=400, seed=0, penalty=None):
     """Resample rows to get a selection frequency and an interval per feature.
 
     With tens of observations the point estimate of any single coefficient is
@@ -152,7 +153,7 @@ def bootstrap_coefficients(Z, y, lam, l1_ratio=0.5, n_boot=400, seed=0):
         if np.unique(idx).size < 4:
             continue
         ym = y[idx].mean()
-        draws[b] = elastic_net(Z[idx], y[idx] - ym, lam, l1_ratio)
+        draws[b] = elastic_net(Z[idx], y[idx] - ym, lam, l1_ratio, penalty=penalty)
     return {
         "mean": draws.mean(axis=0),
         "selection_rate": (np.abs(draws) > 1e-8).mean(axis=0),
@@ -160,6 +161,23 @@ def bootstrap_coefficients(Z, y, lam, l1_ratio=0.5, n_boot=400, seed=0):
         "ci_high": np.percentile(draws, 97.5, axis=0),
         "sign_consistency": np.maximum((draws > 0).mean(axis=0), (draws < 0).mean(axis=0)),
     }
+
+
+def penalty_from_weights(weights, p):
+    """Importance weights -> per-feature penalty factors (glmnet's penalty.factor).
+
+    Weight 2 halves the shrinkage on that feature, 0.5 doubles it. This is the
+    only place a weight can act: multiplying a feature by a constant does
+    nothing once it is standardised. The CV then picks lambda for the weighted
+    penalty, so weights shift the balance between features, not the overall
+    amount of regularisation.
+    """
+    if weights is None:
+        return np.ones(p)
+    w = np.asarray(weights, dtype="float64")
+    if w.shape != (p,) or np.any(w <= 0):
+        raise ValueError(f"need {p} positive weights, got {w.tolist()}")
+    return 1.0 / w
 
 
 def benjamini_hochberg(pvals, q=0.05):
@@ -200,7 +218,7 @@ def choose_method(n_dates):
 # Ranking
 # ---------------------------------------------------------------------------
 
-def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0):
+def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0, weights=None):
     """Rank candidate factors by their association with ship density.
 
     Three views, because no single one is trustworthy at this sample size:
@@ -220,9 +238,11 @@ def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0):
     y = np.asarray(y, dtype="float64")
     Z, _, _ = standardise(X)
 
-    lam, curve = cv_elastic_net(Z, y, l1_ratio=l1_ratio)
-    beta = elastic_net(Z, y - y.mean(), lam, l1_ratio)
-    boot = bootstrap_coefficients(Z, y, lam, l1_ratio, n_boot=n_boot, seed=seed)
+    pf = penalty_from_weights(weights, X.shape[1])
+    lam, curve = cv_elastic_net(Z, y, l1_ratio=l1_ratio, penalty=pf)
+    beta = elastic_net(Z, y - y.mean(), lam, l1_ratio, penalty=pf)
+    boot = bootstrap_coefficients(Z, y, lam, l1_ratio, n_boot=n_boot, seed=seed,
+                                  penalty=pf)
 
     rhos, praw = [], []
     for j in range(X.shape[1]):
@@ -236,6 +256,7 @@ def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0):
     for j, name in enumerate(feature_names):
         rows.append({
             "factor": name,
+            "weight": float(1.0 / pf[j]),
             "enet_beta": float(beta[j]),
             "selection_rate": float(boot["selection_rate"][j]),
             "sign_consistency": float(boot["sign_consistency"][j]),
@@ -251,7 +272,8 @@ def rank_factors(X, y, feature_names, l1_ratio=0.5, n_boot=400, seed=0):
             "n": len(y), "n_features": X.shape[1]}
 
 
-def explain_date(X, y, feature_names, target_index, lam=None, l1_ratio=0.5):
+def explain_date(X, y, feature_names, target_index, lam=None, l1_ratio=0.5,
+                 weights=None):
     """Decompose one date's predicted density into per-factor contributions.
 
     This answers "which factors drove the ship count on THIS date" as opposed
@@ -267,10 +289,11 @@ def explain_date(X, y, feature_names, target_index, lam=None, l1_ratio=0.5):
     X = np.asarray(X, dtype="float64")
     y = np.asarray(y, dtype="float64")
     Z, mu, sd = standardise(X)
+    pf = penalty_from_weights(weights, X.shape[1])
     if lam is None:
-        lam, _ = cv_elastic_net(Z, y, l1_ratio=l1_ratio)
+        lam, _ = cv_elastic_net(Z, y, l1_ratio=l1_ratio, penalty=pf)
     ym = y.mean()
-    beta = elastic_net(Z, y - ym, lam, l1_ratio)
+    beta = elastic_net(Z, y - ym, lam, l1_ratio, penalty=pf)
 
     z = Z[target_index]
     contrib = beta * z

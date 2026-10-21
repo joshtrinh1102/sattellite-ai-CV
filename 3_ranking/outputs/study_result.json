@@ -97,6 +97,19 @@
     "month_cos",
     "time_trend"
   ],
+  "level": "dimension",
+  "weights": {
+    "wind_speed_10m_max_win_mean": 0.5,
+    "wind_gusts_10m_max_win_max": 0.5,
+    "precipitation_sum_win_mean": 0.5,
+    "windy_days_win": 0.5,
+    "wet_days_win": 0.5,
+    "wind_speed_10m_max_day": 0.5,
+    "days_to_lny": 1.0,
+    "month_sin": 1.0,
+    "month_cos": 1.0,
+    "time_trend": 1.0
+  },
   "periods": {
     "pre_covid": {
       "n": 15,
@@ -131,47 +144,47 @@
     }
   },
   "ranking": {
-    "lambda": 0.0023018073130224677,
+    "lambda": 0.004012807031942776,
     "cv_curve": [
       [
         0.001,
-        0.0012737259818432494
+        0.001248567473889674
       ],
       [
         0.0013203517797162948,
-        0.0012532260587182539
+        0.001245832521486192
       ],
       [
         0.0017433288221999873,
-        0.001236824144911863
+        0.0012468118568227627
       ],
       [
         0.0023018073130224677,
-        0.0012271239115164453
+        0.0012403924213216777
       ],
       [
         0.0030391953823131978,
-        0.0012308377897692433
+        0.0012283831003597862
       ],
       [
         0.004012807031942776,
-        0.001254810484857098
+        0.0012128994328593227
       ],
       [
         0.005298316906283708,
-        0.0012650440691933439
+        0.0012142039517806593
       ],
       [
         0.006995642156712634,
-        0.0012652320609881158
+        0.0012286314754737322
       ],
       [
         0.009236708571873866,
-        0.001256117126570342
+        0.0012441367559526335
       ],
       [
         0.012195704601594415,
-        0.0012634731761301408
+        0.0012617092683169726
       ],
       [
         0.01610262027560939,
@@ -256,11 +269,51 @@
     ],
     "ranking": [
       {
+        "factor": "time_trend",
+        "weight": 1.0,
+        "enet_beta": -0.005242197245779867,
+        "selection_rate": 0.92,
+        "sign_consistency": 0.9125,
+        "boot_ci_low": -0.011744092177893383,
+        "boot_ci_high": 0.0,
+        "spearman_rho": -0.20973265654116474,
+        "spearman_p": 0.06900513117648505,
+        "spearman_p_adj": 0.6900513117648505,
+        "bh_survives": false
+      },
+      {
+        "factor": "month_sin",
+        "weight": 1.0,
+        "enet_beta": -0.0027989718683849255,
+        "selection_rate": 0.6975,
+        "sign_consistency": 0.695,
+        "boot_ci_low": -0.009043986968335712,
+        "boot_ci_high": 0.0,
+        "spearman_rho": -0.14525233781075494,
+        "spearman_p": 0.21058958255763743,
+        "spearman_p_adj": 0.7019652751921247,
+        "bh_survives": false
+      },
+      {
+        "factor": "month_cos",
+        "weight": 1.0,
+        "enet_beta": -0.0006982852011565303,
+        "selection_rate": 0.6025,
+        "sign_consistency": 0.575,
+        "boot_ci_low": -0.007090577095198662,
+        "boot_ci_high": 0.00030737577493185987,
+        "spearman_rho": -0.0763459066098884,
+        "spearman_p": 0.5121489379721155,
+        "spearman_p_adj": 0.7554373540669119,
+        "bh_survives": false
+      },
+      {
         "factor": "wind_speed_10m_max_day",
-        "enet_beta": -0.006417050034401492,
-        "selection_rate": 0.9525,
-        "sign_consistency": 0.9525,
-        "boot_ci_low": -0.013016275021752378,
+        "weight": 0.5,
+        "enet_beta": -0.0002804851791322637,
+        "selection_rate": 0.4825,
+        "sign_consistency": 0.4825,
+        "boot_ci_low": -0.004956106166328656,
         "boot_ci_high": 0.0,
         "spearman_rho": -0.06038295632579582,
         "spearman_p": 0.6043498832535296,
@@ -269,11 +322,12 @@
       },
       {
         "factor": "wind_speed_10m_max_win_mean",
-        "enet_beta": 0.010851265503756459,
-        "selection_rate": 0.945,
-        "sign_consistency": 0.945,
+        "weight": 0.5,
+        "enet_beta": 0.0,
+        "selection_rate": 0.2625,
+        "sign_consistency": 0.2625,
         "boot_ci_low": 0.0,
-        "boot_ci_high": 0.02391418098280334,
+        "boot_ci_high": 0.00482479458874321,
         "spearman_rho": 0.16122769864835276,
         "spearman_p": 0.16411101209294784,
         "spearman_p_adj": 0.7019652751921247,
@@ -281,10 +335,11 @@
       },
       {
         "factor": "wind_gusts_10m_max_win_max",
-        "enet_beta": -0.006729670043793491,
-        "selection_rate": 0.825,
-        "sign_consistency": 0.8225,
-        "boot_ci_low": -0.014884097142562891,
+        "weight": 0.5,
+        "enet_beta": 0.0,
+        "selection_rate": 0.2625,
+        "sign_consistency": 0.2625,
+        "boot_ci_low": -0.005031070609904329,
         "boot_ci_high": 0.0,
         "spearman_rho": -0.06652445673494245,
         "spearman_p": 0.5680211666821235,
@@ -292,48 +347,26 @@
         "bh_survives": false
       },
       {
-        "factor": "month_sin",
-        "enet_beta": -0.003979041288485433,
-        "selection_rate": 0.8125,
-        "sign_consistency": 0.8025,
-        "boot_ci_low": -0.01243750186115735,
-        "boot_ci_high": 0.0,
-        "spearman_rho": -0.14525233781075494,
-        "spearman_p": 0.21058958255763743,
-        "spearman_p_adj": 0.7019652751921247,
-        "bh_survives": false
-      },
-      {
-        "factor": "time_trend",
-        "enet_beta": -0.0033976020340195606,
-        "selection_rate": 0.765,
-        "sign_consistency": 0.7025,
-        "boot_ci_low": -0.0109568044014176,
-        "boot_ci_high": 0.0020198628099489767,
-        "spearman_rho": -0.20973265654116474,
-        "spearman_p": 0.06900513117648505,
-        "spearman_p_adj": 0.6900513117648505,
-        "bh_survives": false
-      },
-      {
-        "factor": "month_cos",
-        "enet_beta": -2.573117583852449e-05,
-        "selection_rate": 0.6025,
-        "sign_consistency": 0.5175,
-        "boot_ci_low": -0.009115899086686726,
-        "boot_ci_high": 0.002210975454968768,
-        "spearman_rho": -0.0763459066098884,
-        "spearman_p": 0.5121489379721155,
-        "spearman_p_adj": 0.7554373540669119,
+        "factor": "days_to_lny",
+        "weight": 1.0,
+        "enet_beta": -0.0,
+        "selection_rate": 0.2475,
+        "sign_consistency": 0.1975,
+        "boot_ci_low": -0.005184933392409269,
+        "boot_ci_high": 0.0025552830242132857,
+        "spearman_rho": 0.027961091447393224,
+        "spearman_p": 0.8105115701761688,
+        "spearman_p_adj": 0.9005684113068543,
         "bh_survives": false
       },
       {
         "factor": "windy_days_win",
-        "enet_beta": -0.0012632824804499915,
-        "selection_rate": 0.5775,
-        "sign_consistency": 0.515,
-        "boot_ci_low": -0.013047131564368543,
-        "boot_ci_high": 0.0021526093128061835,
+        "weight": 0.5,
+        "enet_beta": 0.0,
+        "selection_rate": 0.13,
+        "sign_consistency": 0.1175,
+        "boot_ci_low": -0.003137286760463184,
+        "boot_ci_high": 0.0,
         "spearman_rho": -0.08808375377629665,
         "spearman_p": 0.44926421177054815,
         "spearman_p_adj": 0.7554373540669119,
@@ -341,11 +374,12 @@
       },
       {
         "factor": "precipitation_sum_win_mean",
-        "enet_beta": 0.0010234637945260934,
-        "selection_rate": 0.56,
-        "sign_consistency": 0.5325,
-        "boot_ci_low": -0.00010318703552138146,
-        "boot_ci_high": 0.0061883616199728654,
+        "weight": 0.5,
+        "enet_beta": 0.0,
+        "selection_rate": 0.0775,
+        "sign_consistency": 0.0775,
+        "boot_ci_low": 0.0,
+        "boot_ci_high": 0.0013315830706632197,
         "spearman_rho": -0.0012211985071374912,
         "spearman_p": 0.9916465236462392,
         "spearman_p_adj": 0.9916465236462392,
@@ -353,96 +387,19 @@
       },
       {
         "factor": "wet_days_win",
+        "weight": 0.5,
         "enet_beta": 0.0,
-        "selection_rate": 0.495,
-        "sign_consistency": 0.305,
-        "boot_ci_low": -0.005486709305425836,
-        "boot_ci_high": 0.005088188579761252,
+        "selection_rate": 0.065,
+        "sign_consistency": 0.035,
+        "boot_ci_low": -0.00031266107299525545,
+        "boot_ci_high": 0.00022242745628596436,
         "spearman_rho": -0.0645903782690956,
         "spearman_p": 0.5793509243955225,
         "spearman_p_adj": 0.7554373540669119,
-        "bh_survives": false
-      },
-      {
-        "factor": "days_to_lny",
-        "enet_beta": -0.0,
-        "selection_rate": 0.4875,
-        "sign_consistency": 0.4275,
-        "boot_ci_low": -0.011343939531843997,
-        "boot_ci_high": 0.0022539081300913615,
-        "spearman_rho": 0.027961091447393224,
-        "spearman_p": 0.8105115701761688,
-        "spearman_p_adj": 0.9005684113068543,
         "bh_survives": false
       }
     ],
     "n": 76,
     "n_features": 10
-  },
-  "explain": {
-    "date": "2021-10-10",
-    "baseline": 0.1352684210526316,
-    "predicted": 0.14576742054503924,
-    "actual": 0.2632,
-    "residual": 0.11743257945496074,
-    "contributions": [
-      {
-        "factor": "wind_gusts_10m_max_win_max",
-        "value": 9.9,
-        "z": -0.6756496251728854,
-        "beta": -0.006729670043793491,
-        "contribution": 0.004546899042626267
-      },
-      {
-        "factor": "month_sin",
-        "value": -1.0,
-        "z": -1.0410285849153833,
-        "beta": -0.003979041288485433,
-        "contribution": 0.004142295721871874
-      },
-      {
-        "factor": "wind_speed_10m_max_day",
-        "value": 5.21,
-        "z": 0.21506990043498528,
-        "beta": -0.006417050034401492,
-        "contribution": -0.0013801143119850476
-      },
-      {
-        "factor": "wind_speed_10m_max_win_mean",
-        "value": 5.007142857142857,
-        "z": 0.12006793832006883,
-        "beta": 0.010851265503756459,
-        "contribution": 0.0013028890771997212
-      },
-      {
-        "factor": "time_trend",
-        "value": 3.0663928815879533,
-        "z": -0.35742689660571864,
-        "beta": -0.0033976020340195606,
-        "contribution": 0.0012143943509208889
-      },
-      {
-        "factor": "windy_days_win",
-        "value": 0.0,
-        "z": -0.7542322773901887,
-        "beta": -0.0012632824804499915,
-        "contribution": 0.0009528084222169237
-      },
-      {
-        "factor": "precipitation_sum_win_mean",
-        "value": 0.38571428571428573,
-        "z": -0.29849279800254624,
-        "beta": 0.0010234637945260934,
-        "contribution": -0.0003054965716823967
-      },
-      {
-        "factor": "month_cos",
-        "value": -1.8369701987210297e-16,
-        "z": -0.9841664989712253,
-        "beta": -2.573117583852449e-05,
-        "contribution": 2.5323761239413632e-05
-      }
-    ],
-    "lambda": 0.0023018073130224677
   }
 }

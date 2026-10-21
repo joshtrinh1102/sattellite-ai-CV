@@ -1,0 +1,216 @@
+# Supply-chain risk factors: the ONE file to edit to change how headlines are
+# classified, grouped and weighted.
+#
+# After editing, rebuild from the cache (offline, seconds - nothing is
+# re-fetched, every cached headline is re-labelled):
+#
+#     cd 2_factors && python -m factors.build
+#     cd 3_ranking && python -m ranking.rank
+#
+# or press "Update data" in the dashboard.
+#
+# HOW A HEADLINE IS LABELLED (multi-label)
+#   Each factor scores the headline: every keyword that matches adds its tier's
+#   points (decisive 3, strong 2, supporting 1). EVERY factor whose score reaches
+#   its threshold labels the article, so "ILWU strike worsens port congestion"
+#   counts for both labor_shortages and logistics_reliability. A headline that
+#   reaches no threshold is "irrelevant" and is left out of the shares.
+#
+# KEYWORD SYNTAX
+#   "strike"        whole word or phrase only ("strike" does not match "strikes")
+#   "regulat*"      word start - matches regulation, regulatory, regulator...
+#   "re:\bcosts? (rise|soar)"   raw regular expression, for anything fancier
+#   Matching ignores case and punctuation ("COVID-19" is seen as "covid 19").
+#
+# KEYS (the [factors.<key>] and [dimensions.<key>] names) become column names,
+# so use lowercase letters, digits and underscores only.
+#
+# WEIGHTS - how much the ranking model favours keeping a factor
+#   1.0 is neutral. 2.0 halves the shrinkage the elastic net applies to it;
+#   0.5 doubles it. Weights are a PRIOR you are imposing: they change which
+#   factors the multivariate model keeps, but not the univariate Spearman test
+#   or its significance. The results write-up lists every non-neutral weight.
+
+[settings]
+default_threshold = 2.0      # points a factor needs unless it sets its own
+
+# Model weights for the factors that do not come from news.
+[weights]
+weather = 0.5                # requirements.md: "scale down weather factors"
+season = 1.0                 # Lunar New Year distance, month of year
+trend = 1.0                  # long-run time trend
+news_summary = 1.0           # overall tone and volume of relevant headlines
+
+
+# ---------------------------------------------------------------------------
+# Dimensions - broader analytical groups. The ranking uses these by default
+# (`python -m ranking.rank --topics individual` ranks single factors instead).
+# A dimension's weight applies when ranking by dimension.
+# ---------------------------------------------------------------------------
+
+[dimensions.economy_demand]
+title = "Economy & demand"
+weight = 1.0
+
+[dimensions.supply_capacity]
+title = "Supply & capacity"
+weight = 1.0
+
+[dimensions.port_flow]
+# Congestion headlines are often written BECAUSE ships are queuing, so this
+# dimension can track the ship count rather than drive it. Read it as an echo.
+title = "Port flow"
+weight = 1.0
+
+[dimensions.policy_geopolitics]
+title = "Policy & geopolitics"
+weight = 1.5                 # requirements.md: "add weight to political issues"
+
+[dimensions.external_shocks]
+title = "External shocks"
+weight = 1.5                 # requirements.md: Covid called out by name
+
+[dimensions.digital_reputation]
+title = "Digital & reputation"
+weight = 1.0
+
+
+# ---------------------------------------------------------------------------
+# Factors - the NetSuite supply chain risk categories from requirements.md,
+# plus Health/Pandemic and Conflict/War. A factor's weight applies when
+# ranking individual factors. Add `threshold = 3.0` to make one stricter.
+# ---------------------------------------------------------------------------
+
+[factors.inflation_econ]
+title = "Inflation & economic concerns"
+dimension = "economy_demand"
+weight = 1.0
+decisive = ["freight rate*", "spot rate*", "charter rate*", "bunker price*",
+            "bunker cost*"]
+strong = ["inflation*", "recession*", "fuel price*", "fuel cost*",
+          "fuel surcharge*", "diesel price*", "economic downturn*",
+          "consumer price*", "cost of living", "interest rate*"]
+supporting = ["economy*", 're:\bcosts? (rise|soar|surge|climb)', "profit*",
+              "earnings*"]
+
+[factors.material_shortages]
+title = "Material shortages"
+dimension = "supply_capacity"
+weight = 1.0
+decisive = ["chassis shortage*", "container shortage*", "equipment shortage*",
+            "empty container*", "empties", "box shortage*"]
+strong = ["shortage of", "semiconductor*", "chip shortage*", "raw material*"]
+supporting = ["shortage*", "scarcity*"]
+
+[factors.natural_disasters]
+title = "Natural disasters"
+dimension = "external_shocks"
+weight = 1.0
+decisive = ["hurricane*", "typhoon*", "earthquake*", "tsunami*", "wildfire",
+            "dense fog*", "fog closure*", "fog delay*", "storm closes*",
+            "storm shuts*", "storm halts*"]
+strong = ["flood*", "storm", "high wind", "high winds", "gale*", "heavy rain*",
+          "drought*"]
+supporting = ["weather delay*", "weather disrupt*", "weather close*",
+              "severe weather*"]
+
+[factors.global_regulations]
+title = "Global regulations"
+dimension = "policy_geopolitics"
+weight = 1.0
+decisive = ["tariff*", "sanction*", "customs rule*", "import dut*", "trade war*",
+            're:\bemissions? (rule|regulation|standard)', "imo 2020*",
+            "carbon tax*"]
+strong = ["regulat*", "legislation*", "policy change*", "executive order*",
+          "ban on*"]
+supporting = ["compliance*", "mandate*", "federal maritime*"]
+
+[factors.cybersecurity]
+title = "Cybersecurity threats"
+dimension = "digital_reputation"
+weight = 1.0
+decisive = ["ransomware*", 're:\bcyber ?attack', "cybersecurity*",
+            "data breach*"]
+strong = ["hacker", "hackers", "hacked*", "malware*", "phishing*", "it outage*"]
+supporting = ["cyber", "security breach*"]
+
+[factors.logistics_reliability]
+title = "Logistics reliability"
+dimension = "port_flow"
+weight = 1.0
+decisive = ["congestion*", "backlog*", "bottleneck*", "dwell time*",
+            "berth delay*", "berth wait*", "blank sailing*",
+            "schedule reliability*", "at anchor", "queue of ships*"]
+strong = ["delay*", "gridlock*", 're:\bpile ?up', "turn time*", "wait time*",
+          "logjam*", "supply chain crisis*", "supply chain disruption*",
+          "supply chain snarl*", "supply chain mess*", "supply chain woes*"]
+supporting = ["throughput*", "vessel traffic*", "port traffic*", "queue*"]
+
+[factors.labor_shortages]
+title = "Labor shortages"
+dimension = "supply_capacity"
+weight = 1.0
+decisive = ["ilwu", "strike", "walkout*", "work stoppage*", "picket*",
+            're:\block ?out',
+            're:\blabou?r (dispute|action|contract|negotiation|shortage|unrest)']
+strong = ["union", "dockworker*", "longshore*", "staffing*", "worker shortage*",
+          "driver shortage*", "trucker shortage*", "trucker protest*"]
+supporting = ["worker", "workers", "hiring*", "wage", "wages"]
+
+[factors.demand_volatility]
+title = "Demand volatility"
+dimension = "economy_demand"
+weight = 1.0
+decisive = ["import surge*", "cargo surge*", "peak season*", "record imports*",
+            "record volume*", "record cargo*", "order cancellation*",
+            "demand slump*", "demand collapse*", "demand drop*", "demand surge*"]
+strong = ['re:\bvolumes? (rise|fall|drop|plunge|jump|surge|slide)',
+          "restocking*", "destocking*"]
+supporting = ["demand", "consumer spending*", "retail sales*"]
+
+[factors.operational_risks]
+title = "Operational risks"
+dimension = "supply_capacity"
+weight = 1.0
+decisive = ["crane failure*", "crane collapse*", "crane accident*",
+            "terminal outage*", "terminal shutdown*", "terminal closure*",
+            "allision*", "grounding*", "capsiz*", "collision*", "vessel fire*",
+            "oil spill*"]
+strong = ["breakdown*", "malfunction*", "equipment failure*", "power outage*",
+          "derail*", "accident*", "explosion*", 're:\bcontainers? lost',
+          "ran aground*"]
+supporting = ["maintenance*", "repair*", "dredging*", "incident*"]
+
+[factors.reputation_risks]
+title = "Reputation risks"
+dimension = "digital_reputation"
+weight = 1.0
+decisive = ["boycott*", "esg", "greenwash*", 're:\bforced labou?r',
+            "human rights*"]
+strong = ["lawsuit*", "protest against*", "scandal*", "public backlash*",
+          "fined for*"]
+supporting = ["criticism*", "reputation*", "community opposition*",
+              "community concern*", "pollution*"]
+
+[factors.health_pandemic]
+title = "Health / pandemic"
+dimension = "external_shocks"
+weight = 1.5                 # requirements.md: Covid called out by name
+decisive = ["covid*", "coronavirus*", "pandemic*", "quarantine*", "omicron*",
+            "delta variant*", "crew change crisis*", "crew stranded*",
+            "crew change*"]
+strong = ['re:\block ?down', "outbreak*", "vaccine*", "vaccination*",
+          "epidemic*", "infection*"]
+supporting = ["health order*", "health protocol*", "mask mandate*"]
+
+[factors.conflict_war]
+title = "Conflict / war"
+dimension = "policy_geopolitics"
+weight = 1.5                 # requirements.md: Strait of Hormuz called out by name
+decisive = ["red sea*", "houthi*", "blockade*", "war risk*", 're:\bwar ?zone',
+            "missile*", "hormuz*"]
+# "war" but not "trade war" / "price war" - those are policy and pricing, and
+# with multi-label they would otherwise also count as armed conflict.
+strong = ['re:(?<!trade )(?<!price )\bwar\b', "invasion*", "conflict*", "military*", "piracy*", "hijack*",
+          "ukraine*", "russia*", "gaza*", "israel*", "suez*", "iran*"]
+supporting = ["geopolitic*", "tension*"]

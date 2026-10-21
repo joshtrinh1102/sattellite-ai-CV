@@ -59,7 +59,7 @@ def _num(v):
     return None if v in (None, "") else float(v)
 
 
-def window_features(daily, d, window=7, groups=None):
+def window_features(daily, d, window=7, level="factor"):
     """Factor values over the `window` days ending on capture date `d`.
 
     Weather is summarised two ways - the day itself, and the run-up, because a
@@ -86,23 +86,23 @@ def window_features(daily, d, window=7, groups=None):
 
     if len(days) < window or not all(x["news_covered"] == "1" for x in days):
         return wx, None
-    topics = [c[len("count_"):] for c in days[0] if c.startswith("count_")]
-    if groups:   # fold topics into dimensions; unlisted topics keep their own
-        grouped = {t for ts in groups.values() for t in ts}
-        groups = {**groups, **{t: [t] for t in topics if t not in grouped}}
-    else:
-        groups = {t: [t] for t in topics}
+    # level="dimension" uses the dim_ columns 2_factors writes, which count a
+    # multi-label headline once per dimension; older CSVs without them fall
+    # back to individual factors.
+    prefix = "dim_" if level == "dimension" else "count_"
+    if not any(c.startswith(prefix) for c in days[0]):
+        prefix = "count_"
+    keys = [c[len(prefix):] for c in days[0] if c.startswith(prefix)]
     n_rel = sum(float(x["n_relevant"]) for x in days)
-    news = {f"share_{g}": (sum(float(x[f"count_{t}"]) for x in days
-                               for t in ts if f"count_{t}" in x) / n_rel
-                           if n_rel else 0.0) for g, ts in groups.items()}
+    news = {f"share_{k}": (sum(float(x[f"{prefix}{k}"]) for x in days) / n_rel
+                           if n_rel else 0.0) for k in keys}
     news["tone_mean_relevant"] = (sum(float(x["tone_sum_relevant"]) for x in days)
                                   / n_rel if n_rel else 0.0)
     news["news_volume"] = n_rel
     return wx, news
 
 
-def build_features(counts, daily, use_news, window=7, groups=None):
+def build_features(counts, daily, use_news, window=7, level="factor"):
     """One row per capture date: target density plus every candidate factor.
 
     With `use_news`, dates whose window lacks full news coverage are dropped
@@ -112,7 +112,7 @@ def build_features(counts, daily, use_news, window=7, groups=None):
     t0 = counts[0]["date_obj"]
     for r in counts:
         d = r["date_obj"]
-        wx, news = window_features(daily, d, window, groups)
+        wx, news = window_features(daily, d, window, level)
         if use_news and news is None:
             continue
         month_angle = 2 * np.pi * (d.month - 1) / 12.0
@@ -130,6 +130,40 @@ def build_features(counts, daily, use_news, window=7, groups=None):
     return X, np.array(y, dtype="float64"), dates, names, rows
 
 
+WEATHER_FEATURES = {"wind_speed_10m_max_win_mean", "wind_gusts_10m_max_win_max",
+                    "precipitation_sum_win_mean", "windy_days_win", "wet_days_win",
+                    "wind_speed_10m_max_day"}
+SEASON_FEATURES = {"days_to_lny", "month_sin", "month_cos"}
+
+
+def feature_weights(names, defs):
+    """Importance weight per feature, from handoff/factor_definitions.json.
+
+    share_<key> takes the weight of that factor or dimension; the non-news
+    features take their family's weight. Anything unknown is neutral (1.0), so
+    a run without the definitions file is exactly the unweighted model.
+    """
+    fam = defs.get("weights", {})
+    keyed = {**{k: v["weight"] for k, v in defs.get("factors", {}).items()},
+             **{k: v["weight"] for k, v in defs.get("dimensions", {}).items()}}
+    out = []
+    for n in names:
+        if n.startswith("share_"):
+            w = keyed.get(n[len("share_"):], 1.0)
+        elif n in WEATHER_FEATURES:
+            w = fam.get("weather", 1.0)
+        elif n in SEASON_FEATURES:
+            w = fam.get("season", 1.0)
+        elif n == "time_trend":
+            w = fam.get("trend", 1.0)
+        elif n in ("tone_mean_relevant", "news_volume"):
+            w = fam.get("news_summary", 1.0)
+        else:
+            w = 1.0
+        out.append(float(w))
+    return out
+
+
 def write_csv(path, rows, fieldnames=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -142,8 +176,8 @@ def write_csv(path, rows, fieldnames=None):
 
 
 def main(argv=None):
-    from .config import (FACTOR_RANKING, FACTORS_DAILY, RESULTS_MD, SHIP_COUNTS,
-                         STUDY_FEATURES, STUDY_RESULT, TOPIC_GROUPS)
+    from .config import (FACTOR_DEFS, FACTOR_RANKING, FACTORS_DAILY, RESULTS_MD,
+                         SHIP_COUNTS, STUDY_FEATURES, STUDY_RESULT)
 
     p = argparse.ArgumentParser(description="Rank the factors behind ship counts.")
     p.add_argument("--window", type=int, default=7)
@@ -154,23 +188,25 @@ def main(argv=None):
                    help="auto: use news factors only if every capture date has "
                         "full GDELT coverage; on: drop dates that do not")
     p.add_argument("--topics", choices=["grouped", "individual"], default="grouped",
-                   help="grouped: fold the 12 topics into the dimensions in "
-                        "config.TOPIC_GROUPS; individual: one factor per topic")
+                   help="grouped: one feature per dimension in 2_factors/factors.toml; "
+                        "individual: one feature per factor")
     args = p.parse_args(argv)
-    groups = TOPIC_GROUPS if args.topics == "grouped" else None
+    level = "dimension" if args.topics == "grouped" else "factor"
+    defs = (json.loads(FACTOR_DEFS.read_text(encoding="utf-8"))
+            if FACTOR_DEFS.exists() else {})
 
     counts = read_ship_counts(SHIP_COUNTS)
     daily = {r["date"]: r for r in read_csv(FACTORS_DAILY)}
     print(f"Ship counts: {len(counts)} capture dates, "
           f"{counts[0]['date']} -> {counts[-1]['date']}")
 
-    n_cov = sum(window_features(daily, r["date_obj"], args.window, groups)[1] is not None
+    n_cov = sum(window_features(daily, r["date_obj"], args.window, level)[1] is not None
                 for r in counts)
     have_news = args.news == "on" or (args.news == "auto" and n_cov == len(counts))
     print(f"News coverage: {n_cov}/{len(counts)} capture windows -> news factors "
           + ("ON" if have_news else "OFF (run 2_factors with --fetch-news to fill)"))
 
-    X, y, dts, names, rows = build_features(counts, daily, have_news, args.window, groups)
+    X, y, dts, names, rows = build_features(counts, daily, have_news, args.window, level)
     kept = set(dts)
     occ = [r for r in counts if r["date"] in kept]
     print(f"\nDesign matrix: {X.shape[0]} dates x {X.shape[1]} features")
@@ -182,8 +218,10 @@ def main(argv=None):
     print(f"\nSample-size gate: {len(y)} dates -> {gate['method']}")
     print(f"  {gate['description']}")
 
+    weights = feature_weights(names, defs)
     out = {"gate": gate, "n_dates": len(y), "dates": dts,
-           "has_news_factors": have_news, "features": names}
+           "has_news_factors": have_news, "features": names, "level": level,
+           "weights": dict(zip(names, weights))}
 
     # COVID is asked for by name in requirements.md and is valid at every sample
     # size, so this runs regardless of which gate was selected.
@@ -223,7 +261,7 @@ def main(argv=None):
 
     if gate["method"] == "elastic_net":
         print(f"\nRanking {X.shape[1]} factors (elastic net + {args.boot} bootstraps)...")
-        res = analysis.rank_factors(X, y, names, n_boot=args.boot)
+        res = analysis.rank_factors(X, y, names, n_boot=args.boot, weights=weights)
         out["ranking"] = res
         write_csv(FACTOR_RANKING, res["ranking"])
         print(f"  lambda={res['lambda']:.4f}\n")
@@ -241,7 +279,8 @@ def main(argv=None):
                       f"nearest available: {min(dts, key=lambda d: abs((datetime.strptime(d,'%Y-%m-%d').date() - datetime.strptime(args.explain,'%Y-%m-%d').date()).days))}")
             else:
                 i = dts.index(args.explain)
-                ex = analysis.explain_date(X, y, names, i, lam=res["lambda"])
+                ex = analysis.explain_date(X, y, names, i, lam=res["lambda"],
+                                           weights=weights)
                 out["explain"] = {"date": args.explain, **ex}
                 print(f"\nFactor attribution for {args.explain}")
                 print(f"  actual {ex['actual']:.3f} ships/km2 | "
@@ -323,10 +362,19 @@ def write_report(path, out, occ, feature_names):
         L.append("Read `selection_rate` first: it is how often the factor survives "
                  "regularisation under resampling. A large coefficient selected "
                  "half the time is noise with a number attached.\n")
-        L.append("| factor | coef | selection rate | sign consistency | Spearman rho | p (BH-adj) |")
-        L.append("|---|---:|---:|---:|---:|---:|")
+        tilted = {k: w for k, w in out.get("weights", {}).items() if w != 1.0}
+        if tilted:
+            L.append("**Importance weights are in effect** (from "
+                     "`2_factors/factors.toml`): "
+                     + ", ".join(f"`{k}` x{w:g}" for k, w in tilted.items())
+                     + ". A weight above 1 shrinks that factor less, so the "
+                     "multivariate model is tilted toward keeping it. That is "
+                     "a prior, not evidence; the Spearman test and its "
+                     "BH correction ignore weights entirely.\n")
+        L.append("| factor | weight | coef | selection rate | sign consistency | Spearman rho | p (BH-adj) |")
+        L.append("|---|---:|---:|---:|---:|---:|---:|")
         for row in r["ranking"]:
-            L.append(f"| {row['factor']} | {row['enet_beta']:+.3f} | "
+            L.append(f"| {row['factor']} | {row.get('weight', 1.0):g} | {row['enet_beta']:+.3f} | "
                      f"{row['selection_rate']:.2f} | {row['sign_consistency']:.2f} | "
                      f"{row['spearman_rho']:+.2f} | {row['spearman_p_adj']:.3f}"
                      f"{' **' if row['bh_survives'] else ''} |")
